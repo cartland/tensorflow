@@ -1,4 +1,4 @@
-# Copyright 2015 Google Inc. All Rights Reserved.
+# Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,7 +13,6 @@
 # limitations under the License.
 # ==============================================================================
 
-# pylint: disable=unused-import,g-bad-import-order
 
 """Utilities for parsing PTB text files."""
 from __future__ import absolute_import
@@ -22,20 +21,13 @@ from __future__ import print_function
 
 import collections
 import os
-import sys
-import time
-
-import tensorflow.python.platform
 
 import numpy as np
-from six.moves import xrange  # pylint: disable=redefined-builtin
 import tensorflow as tf
-
-from tensorflow.python.platform import gfile
 
 
 def _read_words(filename):
-  with gfile.GFile(filename, "r") as f:
+  with tf.gfile.GFile(filename, "r") as f:
     return f.read().replace("\n", "<eos>").split()
 
 
@@ -43,7 +35,7 @@ def _build_vocab(filename):
   data = _read_words(filename)
 
   counter = collections.Counter(data)
-  count_pairs = sorted(counter.items(), key=lambda x: -x[1])
+  count_pairs = sorted(counter.items(), key=lambda x: (-x[1], x[0]))
 
   words, _ = list(zip(*count_pairs))
   word_to_id = dict(zip(words, range(len(words))))

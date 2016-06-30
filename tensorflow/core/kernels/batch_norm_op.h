@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ struct BatchNorm {
                   typename TTypes<T>::ConstVec mean,
                   typename TTypes<T>::ConstVec var,
                   typename TTypes<T>::ConstVec beta,
-                  typename TTypes<T>::ConstVec gamma, float variance_epsilon,
+                  typename TTypes<T>::ConstVec gamma, T variance_epsilon,
                   bool scale_after_normalization,
                   typename TTypes<T, 4>::Tensor output) {
     const int depth = mean.dimension(0);
@@ -77,7 +77,7 @@ struct BatchNormGrad {
                   typename TTypes<T>::ConstVec var,
                   typename TTypes<T>::ConstVec gamma,
                   typename TTypes<T, 4>::ConstTensor out_backprop,
-                  float variance_epsilon, bool scale_after_normalization,
+                  T variance_epsilon, bool scale_after_normalization,
                   typename TTypes<T, 4>::Tensor dx, typename TTypes<T>::Vec dm,
                   typename TTypes<T>::Vec dv, typename TTypes<T>::Vec db,
                   typename TTypes<T>::Vec dg, typename TTypes<T>::Vec scratch1,
@@ -86,9 +86,20 @@ struct BatchNormGrad {
     const int rest_size = input.size() / depth;
 
     typedef typename TTypes<T>::ConstVec::Index Index;
+
     Eigen::DSizes<Index, 2> rest_by_depth(rest_size, depth);
+#if !defined(EIGEN_HAS_INDEX_LIST)
     Eigen::DSizes<Index, 2> rest_by_one(rest_size, 1);
     Eigen::DSizes<Index, 2> one_by_depth(1, depth);
+    Eigen::array<Index, 1> reduction_axis;
+    reduction_axis[0] = 0;  // Reduces on first dimension.
+#else
+    Eigen::IndexList<Index, Eigen::type2index<1> > rest_by_one;
+    rest_by_one.set(0, rest_size);
+    Eigen::IndexList<Eigen::type2index<1>, Index> one_by_depth;
+    one_by_depth.set(1, depth);
+    Eigen::IndexList<Eigen::type2index<0> > reduction_axis;
+#endif
 
     // db = out_backprop
     //
@@ -100,9 +111,6 @@ struct BatchNormGrad {
     // dm = sum_over_rest(out_backprop * gamma) * (-1 / rsqrt(v + epsilon))
     //
     // dx = out_backprop * (gamma * rsqrt(v + epsilon))
-    Eigen::array<Index, 1> reduction_axis;
-    reduction_axis[0] = 0;  // Reduces on first dimension.
-
     db.device(d) = out_backprop.reshape(rest_by_depth).sum(reduction_axis);
 
     // scratch1 = rsqrt(v + epsilon)

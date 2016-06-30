@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,17 +20,20 @@ limitations under the License.
 
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/resource_mgr.h"
+#include "tensorflow/core/framework/tensor.h"
+#include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/types.h"
+#include "tensorflow/core/kernels/queue_op.h"
 #include "tensorflow/core/kernels/typed_queue.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/random/philox_random.h"
 #include "tensorflow/core/lib/random/random.h"
 #include "tensorflow/core/lib/random/random_distributions.h"
 #include "tensorflow/core/platform/logging.h"
-#include "tensorflow/core/platform/port.h"
+#include "tensorflow/core/platform/macros.h"
+#include "tensorflow/core/platform/mutex.h"
 #include "tensorflow/core/platform/thread_annotations.h"
-#include "tensorflow/core/public/tensor.h"
-#include "tensorflow/core/public/tensor_shape.h"
+#include "tensorflow/core/platform/types.h"
 
 namespace tensorflow {
 
@@ -50,6 +53,7 @@ class RandomShuffleQueue : public TypedQueue<std::vector<PersistentTensor> > {
                       DoneCallback callback) override;
   void TryDequeue(OpKernelContext* ctx, CallbackWithTuple callback) override;
   void TryDequeueMany(int num_elements, OpKernelContext* ctx,
+                      bool allow_small_batch,
                       CallbackWithTuple callback) override;
   Status MatchesNodeDef(const NodeDef& node_def) override;
 
@@ -104,7 +108,7 @@ Status RandomShuffleQueue::Initialize() {
 }
 
 void RandomShuffleQueue::DequeueLocked(OpKernelContext* ctx, Tuple* tuple) {
-  DCHECK_GT(queues_[0].size(), 0);
+  DCHECK_GT(queues_[0].size(), size_t{0});
   int64 index = generator_() % queues_[0].size();
   (*tuple).reserve(num_components());
   for (int i = 0; i < num_components(); ++i) {
@@ -122,10 +126,10 @@ void RandomShuffleQueue::TryEnqueue(const Tuple& tuple, OpKernelContext* ctx,
   {
     mutex_lock l(mu_);
     already_cancelled = !cm->RegisterCallback(
-        token, [this, token]() { Cancel(kEnqueue, token); });
+        token, [this, cm, token]() { Cancel(kEnqueue, cm, token); });
     if (!already_cancelled) {
       enqueue_attempts_.emplace_back(
-          1, callback, ctx, token,
+          1, callback, ctx, cm, token,
           [tuple, this](Attempt* attempt) EXCLUSIVE_LOCKS_REQUIRED(mu_) {
             if (closed_) {
               attempt->context->SetStatus(errors::Aborted(
@@ -166,10 +170,10 @@ void RandomShuffleQueue::TryEnqueueMany(const Tuple& tuple,
   {
     mutex_lock l(mu_);
     already_cancelled = !cm->RegisterCallback(
-        token, [this, token]() { Cancel(kEnqueue, token); });
+        token, [this, cm, token]() { Cancel(kEnqueue, cm, token); });
     if (!already_cancelled) {
       enqueue_attempts_.emplace_back(
-          batch_size, callback, ctx, token,
+          batch_size, callback, ctx, cm, token,
           [tuple, this](Attempt* attempt) EXCLUSIVE_LOCKS_REQUIRED(mu_) {
             if (closed_) {
               attempt->context->SetStatus(errors::Aborted(
@@ -218,11 +222,11 @@ void RandomShuffleQueue::TryDequeue(OpKernelContext* ctx,
   {
     mutex_lock l(mu_);
     already_cancelled = !cm->RegisterCallback(
-        token, [this, token]() { Cancel(kDequeue, token); });
+        token, [this, cm, token]() { Cancel(kDequeue, cm, token); });
     if (!already_cancelled) {
       // TODO(josh11b): This makes two copies of callback, avoid this if possible.
       dequeue_attempts_.emplace_back(
-          1, [callback]() { callback(Tuple()); }, ctx, token,
+          1, [callback]() { callback(Tuple()); }, ctx, cm, token,
           [callback, this](Attempt* attempt) EXCLUSIVE_LOCKS_REQUIRED(mu_) {
             int32 s = queues_[0].size();
             if (closed_ && s == 0) {
@@ -253,7 +257,15 @@ void RandomShuffleQueue::TryDequeue(OpKernelContext* ctx,
 }
 
 void RandomShuffleQueue::TryDequeueMany(int num_elements, OpKernelContext* ctx,
+                                        bool allow_small_batch,
                                         CallbackWithTuple callback) {
+  if (allow_small_batch) {
+    ctx->SetStatus(
+        errors::Unimplemented("Dequeue: Queue does not support small batches"));
+    callback(Tuple());
+    return;
+  }
+
   if (!specified_shapes()) {
     ctx->SetStatus(
         errors::InvalidArgument("RandomShuffleQueue's DequeueMany requires the "
@@ -303,11 +315,11 @@ void RandomShuffleQueue::TryDequeueMany(int num_elements, OpKernelContext* ctx,
   {
     mutex_lock l(mu_);
     already_cancelled = !cm->RegisterCallback(
-        token, [this, token]() { Cancel(kDequeue, token); });
+        token, [this, cm, token]() { Cancel(kDequeue, cm, token); });
     if (!already_cancelled) {
       // TODO(josh11b): This makes two copies of callback, avoid this if possible.
       dequeue_attempts_.emplace_back(
-          num_elements, [callback]() { callback(Tuple()); }, ctx, token,
+          num_elements, [callback]() { callback(Tuple()); }, ctx, cm, token,
           [callback, this](Attempt* attempt) EXCLUSIVE_LOCKS_REQUIRED(mu_) {
             int32 s = queues_[0].size();
             if (closed_ && s < attempt->elements_requested) {
@@ -323,7 +335,7 @@ void RandomShuffleQueue::TryDequeueMany(int num_elements, OpKernelContext* ctx,
             for (; s > 0; --s) {
               if (attempt->tuple.empty()) {
                 // Only allocate tuple when we have something to dequeue
-                // so we don't use exceessive memory when there are many
+                // so we don't use excessive memory when there are many
                 // blocked dequeue attempts waiting.
                 attempt->tuple.reserve(num_components());
                 for (int i = 0; i < num_components(); ++i) {
@@ -402,17 +414,10 @@ Status RandomShuffleQueue::MatchesNodeDef(const NodeDef& node_def) {
 // backed by RandomShuffleQueue) that persists across different graph
 // executions, and sessions. Running this op produces a single-element
 // tensor of handles to Queues in the corresponding device.
-class RandomShuffleQueueOp : public OpKernel {
+class RandomShuffleQueueOp : public QueueOp {
  public:
   explicit RandomShuffleQueueOp(OpKernelConstruction* context)
-      : OpKernel(context), queue_handle_set_(false) {
-    OP_REQUIRES_OK(context, context->GetAttr("capacity", &capacity_));
-    OP_REQUIRES_OK(context,
-                   context->allocate_persistent(DT_STRING, TensorShape({2}),
-                                                &queue_handle_, nullptr));
-    if (capacity_ < 0) {
-      capacity_ = RandomShuffleQueue::kUnbounded;
-    }
+      : QueueOp(context) {
     OP_REQUIRES_OK(context,
                    context->GetAttr("min_after_dequeue", &min_after_dequeue_));
     OP_REQUIRES(context, min_after_dequeue_ >= 0,
@@ -425,32 +430,12 @@ class RandomShuffleQueueOp : public OpKernel {
     OP_REQUIRES_OK(context, context->GetAttr("seed", &seed_));
     OP_REQUIRES_OK(context, context->GetAttr("seed2", &seed2_));
 
-    OP_REQUIRES_OK(context,
-                   context->GetAttr("component_types", &component_types_));
     OP_REQUIRES_OK(context, context->GetAttr("shapes", &component_shapes_));
   }
 
-  ~RandomShuffleQueueOp() override {
-    // If the queue object was not shared, delete it.
-    if (queue_handle_set_ && cinfo_.resource_is_private_to_kernel()) {
-      TF_CHECK_OK(cinfo_.resource_manager()->Delete<QueueInterface>(
-          cinfo_.container(), cinfo_.name()));
-    }
-  }
-
-  void Compute(OpKernelContext* ctx) override {
-    mutex_lock l(mu_);
-    if (!queue_handle_set_) {
-      OP_REQUIRES_OK(ctx, SetQueueHandle(ctx));
-    }
-    ctx->set_output_ref(0, &mu_, queue_handle_.AccessTensor(ctx));
-  }
-
- private:
-  Status SetQueueHandle(OpKernelContext* ctx) EXCLUSIVE_LOCKS_REQUIRED(mu_) {
-    TF_RETURN_IF_ERROR(cinfo_.Init(ctx->resource_manager(), def()));
-    QueueInterface* queue;
-    auto creator = [this](QueueInterface** ret) {
+ protected:
+  CreatorCallback GetCreator() const override {
+    return [this](QueueInterface** ret) {
       auto* q = new RandomShuffleQueue(capacity_, min_after_dequeue_, seed_,
                                        seed2_, component_types_,
                                        component_shapes_, cinfo_.name());
@@ -462,30 +447,13 @@ class RandomShuffleQueueOp : public OpKernel {
       }
       return s;
     };
-    TF_RETURN_IF_ERROR(
-        cinfo_.resource_manager()->LookupOrCreate<QueueInterface>(
-            cinfo_.container(), cinfo_.name(), &queue, creator));
-    core::ScopedUnref unref_me(queue);
-    // Verify that the shared queue is compatible with the requested arguments.
-    TF_RETURN_IF_ERROR(queue->MatchesNodeDef(def()));
-    auto h = queue_handle_.AccessTensor(ctx)->flat<string>();
-    h(0) = cinfo_.container();
-    h(1) = cinfo_.name();
-    queue_handle_set_ = true;
-    return Status::OK();
   }
 
-  int32 capacity_;
+ private:
   int32 min_after_dequeue_;
   int64 seed_;
   int64 seed2_;
-  DataTypeVector component_types_;
   std::vector<TensorShape> component_shapes_;
-  ContainerInfo cinfo_;
-
-  mutex mu_;
-  PersistentTensor queue_handle_ GUARDED_BY(mu_);
-  bool queue_handle_set_ GUARDED_BY(mu_);
 
   TF_DISALLOW_COPY_AND_ASSIGN(RandomShuffleQueueOp);
 };

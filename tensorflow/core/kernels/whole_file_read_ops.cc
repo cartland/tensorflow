@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,12 +18,12 @@ limitations under the License.
 #include <memory>
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/reader_op_kernel.h"
+#include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/kernels/reader_base.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/strings/strcat.h"
+#include "tensorflow/core/platform/env.h"
 #include "tensorflow/core/platform/protobuf.h"
-#include "tensorflow/core/public/env.h"
-#include "tensorflow/core/public/tensor_shape.h"
 
 namespace tensorflow {
 
@@ -32,9 +32,8 @@ static Status ReadEntireFile(Env* env, const string& filename,
   uint64 file_size = 0;
   TF_RETURN_IF_ERROR(env->GetFileSize(filename, &file_size));
   contents->resize(file_size);
-  RandomAccessFile* file;
+  std::unique_ptr<RandomAccessFile> file;
   TF_RETURN_IF_ERROR(env->NewRandomAccessFile(filename, &file));
-  std::unique_ptr<RandomAccessFile> make_sure_file_gets_deleted(file);
   StringPiece data;
   TF_RETURN_IF_ERROR(file->Read(0, file_size, &data, &(*contents)[0]));
   if (data.size() != file_size) {

@@ -1,10 +1,11 @@
 # Mandelbrot Set
 
-Visualizing the Mandelbrot set doesn't have anything to do with machine
-learning, but it makes for a fun example of how one can use TensorFlow for
-general mathematics.  This is actually a pretty naive implementation of the
-visualization, but it makes the point.  (We may end up providing a more
-elaborate implementation down the line to produce more truly beautiful images.)
+Visualizing the [Mandelbrot set](https://en.wikipedia.org/wiki/Mandelbrot_set)
+doesn't have anything to do with machine learning, but it makes for a fun
+example of how one can use TensorFlow for general mathematics.  This is
+actually a pretty naive implementation of the visualization, but it makes the
+point.  (We may end up providing a more elaborate implementation down the line
+to produce more truly beautiful images.)
 
 Note: This tutorial was originally prepared as an IPython notebook.
 
@@ -19,9 +20,8 @@ import numpy as np
 
 # Imports for visualization
 import PIL.Image
-from cStringIO import StringIO
-from IPython.display import clear_output, Image, display
-import scipy.ndimage as nd
+from io import BytesIO
+from IPython.display import Image, display
 ```
 
 Now we'll define a function to actually display the image once we have
@@ -38,7 +38,7 @@ def DisplayFractal(a, fmt='jpeg'):
   img[a==a.max()] = 0
   a = img
   a = np.uint8(np.clip(a, 0, 255))
-  f = StringIO()
+  f = BytesIO()
   PIL.Image.fromarray(a).save(f, fmt)
   display(Image(data=f.getvalue()))
 ```
@@ -64,9 +64,9 @@ Z = X+1j*Y
 Now we define and initialize TensorFlow tensors.
 
 ```python
-xs = tf.constant(Z.astype("complex64"))
+xs = tf.constant(Z.astype(np.complex64))
 zs = tf.Variable(xs)
-ns = tf.Variable(tf.zeros_like(xs, "float32"))
+ns = tf.Variable(tf.zeros_like(xs, tf.float32))
 ```
 
 TensorFlow requires that you explicitly initialize variables before using them.
@@ -94,7 +94,7 @@ not_diverged = tf.complex_abs(zs_) < 4
 #
 step = tf.group(
   zs.assign(zs_),
-  ns.assign_add(tf.cast(not_diverged, "float32"))
+  ns.assign_add(tf.cast(not_diverged, tf.float32))
   )
 ```
 

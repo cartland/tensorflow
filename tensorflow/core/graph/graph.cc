@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@ limitations under the License.
 
 #include "tensorflow/core/graph/graph.h"
 
+#include <vector>
 #include "tensorflow/core/framework/node_def_util.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/lib/core/errors.h"
@@ -48,6 +49,8 @@ Node::Node()
     : id_(-1),
       cost_id_(-1),
       class_(NC_UNINITIALIZED),
+      is_host_send_(false),
+      is_host_recv_(false),
       props_(nullptr),
       assigned_device_name_() {}
 
@@ -83,10 +86,10 @@ void Node::Initialize(int id, int cost_id, Properties* props) {
   } while (0)
 
   SET_CLASS(NC_SWITCH, ts, "Switch", "RefSwitch");
-  SET_CLASS(NC_MERGE, ts, "Merge", "");
+  SET_CLASS(NC_MERGE, ts, "Merge", "RefMerge");
   SET_CLASS(NC_ENTER, ts, "Enter", "RefEnter");
-  SET_CLASS(NC_EXIT, ts, "Exit", "");
-  SET_CLASS(NC_NEXT_ITERATION, ts, "NextIteration", "");
+  SET_CLASS(NC_EXIT, ts, "Exit", "RefExit");
+  SET_CLASS(NC_NEXT_ITERATION, ts, "NextIteration", "RefNextIteration");
   SET_CLASS(NC_LOOP_COND, ts, "LoopCond", "");
   SET_CLASS(NC_CONTROL_TRIGGER, ts, "ControlTrigger", "");
   SET_CLASS(NC_SEND, ts, "_Send", "_HostSend");
@@ -94,10 +97,19 @@ void Node::Initialize(int id, int cost_id, Properties* props) {
   SET_CLASS(NC_CONSTANT, ts, "Const", "HostConst");
   SET_CLASS(NC_VARIABLE, ts, "Variable", "");
   SET_CLASS(NC_IDENTITY, ts, "Identity", "RefIdentity");
+  SET_CLASS(NC_GET_SESSION_HANDLE, ts, "GetSessionHandle", "");
+  SET_CLASS(NC_GET_SESSION_TENSOR, ts, "GetSessionTensor", "");
+  SET_CLASS(NC_DELETE_SESSION_TENSOR, ts, "DeleteSessionTensor", "");
   if (class_ == NC_UNINITIALIZED) {
     class_ = NC_OTHER;  // Catch all
   }
 #undef SET_CLASS
+
+  if (ts == "_HostSend") {
+    is_host_send_ = true;
+  } else if (ts == "_HostRecv") {
+    is_host_recv_ = true;
+  }
 }
 
 void Node::Clear() {
@@ -125,6 +137,22 @@ gtl::iterator_range<NeighborIter> Node::in_nodes() const {
                          NeighborIter(in_edges_.end(), true));
 }
 
+void Node::MaybeCopyOnWrite() {
+  // Properties may be shared between Nodes. Make a copy if so.
+  if (!props_->RefCountIsOne()) {
+    Properties* new_props =
+        new Properties(props_->op_def_, props_->node_def_, props_->input_types_,
+                       props_->output_types_);
+    props_->Unref();
+    props_ = new_props;
+  }
+}
+
+void Node::ClearAttr(const string& name) {
+  MaybeCopyOnWrite();
+  (*props_->node_def_.mutable_attr()).erase(name);
+}
+
 // Node::Properties
 
 Node::Properties::Properties(const OpDef* op_def, const NodeDef& node_def,
@@ -140,7 +168,10 @@ Node::Properties::~Properties() {}
 // Graph
 
 Graph::Graph(const OpRegistryInterface* ops)
-    : ops_(ops), version_(TF_GRAPH_DEF_VERSION), arena_(8 << 10 /* 8kB */) {
+    : ops_(ops), arena_(8 << 10 /* 8kB */) {
+  versions_.set_producer(TF_GRAPH_DEF_VERSION);
+  versions_.set_min_consumer(TF_GRAPH_DEF_VERSION_MIN_CONSUMER);
+
   // Source and sink have no endpoints, just control edges.
   NodeDef def;
   def.set_name("_SOURCE");
@@ -174,26 +205,20 @@ Graph::~Graph() {
 }
 
 Node* Graph::AddNode(const NodeDef& node_def, Status* status) {
-  const OpDef* op_def = ops_->LookUp(node_def.op(), status);
-  if (op_def == nullptr) return nullptr;
-
-  // TODO(vrv,josh11b): Find a location higher in the stack to add these defaults
-  // to the NodeDef.
-  NodeDef node_def_with_defaults(node_def);
-  AddDefaultsToNodeDef(*op_def, &node_def_with_defaults);
+  const OpDef* op_def;
+  status->Update(ops_->LookUpOpDef(node_def.op(), &op_def));
+  if (!status->ok()) return nullptr;
 
   DataTypeVector inputs;
   DataTypeVector outputs;
-  status->Update(
-      InOutTypesForNode(node_def_with_defaults, *op_def, &inputs, &outputs));
+  status->Update(InOutTypesForNode(node_def, *op_def, &inputs, &outputs));
   if (!status->ok()) {
-    *status = AttachDef(*status, node_def_with_defaults);
+    *status = AttachDef(*status, node_def);
     return nullptr;
   }
 
   Node* node = AllocateNode(
-      new Node::Properties(op_def, node_def_with_defaults, inputs, outputs),
-      nullptr);
+      new Node::Properties(op_def, node_def, inputs, outputs), nullptr);
   return node;
 }
 
@@ -256,11 +281,11 @@ const Edge* Graph::AddEdge(Node* source, int x, Node* dest, int y) {
 void Graph::RemoveEdge(const Edge* e) {
   DCHECK(IsValidNode(e->src_)) << e->src_->DebugString();
   DCHECK(IsValidNode(e->dst_)) << e->dst_->DebugString();
-  CHECK_EQ(e->src_->out_edges_.erase(e), 1);
-  CHECK_EQ(e->dst_->in_edges_.erase(e), 1);
+  CHECK_EQ(e->src_->out_edges_.erase(e), size_t{1});
+  CHECK_EQ(e->dst_->in_edges_.erase(e), size_t{1});
   CHECK_EQ(e, edges_[e->id_]);
 
-  CHECK_EQ(edge_set_.erase(e), 1);
+  CHECK_EQ(edge_set_.erase(e), size_t{1});
   edges_[e->id_] = nullptr;
 
   Edge* del = const_cast<Edge*>(e);
@@ -288,7 +313,7 @@ void AddInput(NodeDef* dst, StringPiece src_name, int src_slot) {
 
 void Graph::ToGraphDef(GraphDef* graph_def) const {
   graph_def->Clear();
-  graph_def->set_version(version());
+  graph_def->mutable_versions()->CopyFrom(versions());
   std::vector<const Edge*>
       inputs;  // Construct this outside the loop for speed.
   for (const Node* node : nodes()) {
@@ -310,7 +335,13 @@ void Graph::ToGraphDef(GraphDef* graph_def) const {
       if (edge->IsControlEdge()) {
         inputs.push_back(edge);
       } else {
-        DCHECK(inputs[edge->dst_input()] == nullptr);
+        CHECK(inputs[edge->dst_input()] == nullptr)
+            << "Edge " << edge->src()->DebugString() << ":"
+            << edge->dst()->DebugString() << " with dst_input "
+            << edge->dst_input() << " and had pre-existing input edge "
+            << inputs[edge->dst_input()]->src()->DebugString() << ":"
+            << inputs[edge->dst_input()]->dst()->DebugString();
+
         inputs[edge->dst_input()] = edge;
       }
     }
@@ -357,6 +388,7 @@ Node* Graph::AllocateNode(Node::Properties* props, const Node* cost_node) {
   int cost_id = cost_node ? cost_node->cost_id() : id;
   node->Initialize(id, cost_id, props);
   nodes_.push_back(node);
+  ++num_nodes_;
   return node;
 }
 
@@ -364,6 +396,7 @@ void Graph::ReleaseNode(Node* node) {
   DCHECK(IsValidNode(node)) << node->DebugString();
   nodes_[node->id()] = nullptr;
   free_nodes_.push_back(node);
+  --num_nodes_;
   node->Clear();
 }
 

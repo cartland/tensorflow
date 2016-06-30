@@ -1,4 +1,4 @@
-# Copyright 2015 Google Inc. All Rights Reserved.
+# Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,11 +22,12 @@ import collections
 
 import six
 
+from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import ops
 from tensorflow.python.ops import array_ops
-from tensorflow.python.ops import constant_op
 from tensorflow.python.ops import math_ops
+from tensorflow.python.ops import nn_ops
 
 
 def clip_by_value(t, clip_value_min, clip_value_max,
@@ -58,19 +59,24 @@ def clip_by_value(t, clip_value_min, clip_value_max,
   return t_max
 
 
-def clip_by_norm(t, clip_norm, name=None):
+def clip_by_norm(t, clip_norm, axes=None, name=None):
   """Clips tensor values to a maximum L2-norm.
 
   Given a tensor `t`, and a maximum clip value `clip_norm`, this operation
-  normalizes `t` so that its L2-norm is less than or equal to `clip_norm`.
-  Specifically, if the L2-norm is already less than or equal to `clip_norm`,
-  then `t` is not modified. If the L2-norm is greater than `clip_norm`, then
-  this operation returns a tensor of the same type and shape as `t` with its
-  values set to:
+  normalizes `t` so that its L2-norm is less than or equal to `clip_norm`,
+  along the dimensions given in `axes`. Specifically, in the default case
+  where all dimensions are used for calculation, if the L2-norm of `t` is
+  already less than or equal to `clip_norm`, then `t` is not modified. If
+  the L2-norm is greater than `clip_norm`, then this operation returns a
+  tensor of the same type and shape as `t` with its values set to:
 
   `t * clip_norm / l2norm(t)`
 
   In this case, the L2-norm of the output tensor is `clip_norm`.
+
+  As another example, if `t` is a matrix and `axes == [1]`, then each row
+  of the output will have L2-norm equal to `clip_norm`. If `axes == [0]`
+  instead, each column of the output will be clipped.
 
   This operation is typically used to clip gradients before applying them with
   an optimizer.
@@ -78,6 +84,9 @@ def clip_by_norm(t, clip_norm, name=None):
   Args:
     t: A `Tensor`.
     clip_norm: A 0-D (scalar) `Tensor` > 0. A maximum clipping value.
+    axes: A 1-D (vector) `Tensor` of type int32 containing the dimensions
+      to use for computing the L2-norm. If `None` (the default), uses all
+      dimensions.
     name: A name for the operation (optional).
 
   Returns:
@@ -88,9 +97,10 @@ def clip_by_norm(t, clip_norm, name=None):
 
     # Calculate L2-norm, clip elements by ratio of clip_norm to L2-norm
     l2norm_inv = math_ops.rsqrt(
-        math_ops.reduce_sum(t * t, math_ops.range(array_ops.rank(t))))
+        math_ops.reduce_sum(t * t, axes, keep_dims=True))
     tclip = array_ops.identity(t * clip_norm * math_ops.minimum(
-        l2norm_inv, constant_op.constant(1.0 / clip_norm)), name=name)
+        l2norm_inv, constant_op.constant(1.0, dtype=t.dtype) / clip_norm),
+                               name=name)
 
   return tclip
 
@@ -126,11 +136,18 @@ def global_norm(t_list, name=None):
             name="t_%d" % i)
         if t is not None else t
         for i, t in enumerate(t_list)]
-    squared_norms = array_ops.pack(
-        [math_ops.reduce_sum(v * v) for v in values if v])
+    half_squared_norms = []
+    for v in values:
+      if v is not None:
+        with ops.colocate_with(v):
+          half_squared_norms.append(nn_ops.l2_loss(v))
+
+    half_squared_norm = math_ops.reduce_sum(array_ops.pack(half_squared_norms))
 
     norm = math_ops.sqrt(
-        math_ops.reduce_sum(squared_norms), name="global_norm")
+        half_squared_norm *
+        constant_op.constant(2.0, dtype=half_squared_norm.dtype),
+        name="global_norm")
 
   return norm
 
@@ -157,8 +174,8 @@ def clip_by_global_norm(t_list, clip_norm, use_norm=None, name=None):
   Any of the entries of `t_list` that are of type `None` are ignored.
 
   This is the correct way to perform gradient clipping (for example, see
-  R. Pascanu, T. Mikolov, and Y. Bengio, "On the difficulty of training
-  Recurrent Neural Networks".  http://arxiv.org/abs/1211.5063)
+  [Pascanu et al., 2012](http://arxiv.org/abs/1211.5063)
+  ([pdf](http://arxiv.org/pdf/1211.5063.pdf))).
 
   However, it is slower than `clip_by_norm()` because all the parameters must be
   ready before the clipping operation can be performed.
@@ -197,13 +214,17 @@ def clip_by_global_norm(t_list, clip_norm, use_norm=None, name=None):
         if t is not None else t
         for i, t in enumerate(t_list)]
 
-    values_clipped = [
-        array_ops.identity(v * scale, name="%s_%d" % (name, i))
-        if v is not None else None
-        for i, v in enumerate(values)]
+    values_clipped = []
+    for i, v in enumerate(values):
+      if v is None:
+        values_clipped.append(None)
+      else:
+        with ops.colocate_with(v):
+          values_clipped.append(
+              array_ops.identity(v * scale, name="%s_%d" % (name, i)))
 
     list_clipped = [
-        ops.IndexedSlices(c_v, t.indices)
+        ops.IndexedSlices(c_v, t.indices, t.dense_shape)
         if isinstance(t, ops.IndexedSlices)
         else c_v
         for (c_v, t) in zip(values_clipped, t_list)]

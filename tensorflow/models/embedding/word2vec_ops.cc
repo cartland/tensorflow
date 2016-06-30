@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ REGISTER_OP("Skipgram")
     .Output("total_words_processed: int64")
     .Output("examples: int32")
     .Output("labels: int32")
+    .SetIsStateful()
     .Attr("filename: string")
     .Attr("batch_size: int")
     .Attr("window_size: int = 5")
@@ -55,6 +56,7 @@ REGISTER_OP("NegTrain")
     .Input("examples: int32")
     .Input("labels: int32")
     .Input("lr: float")
+    .SetIsStateful()
     .Attr("vocab_count: list(int)")
     .Attr("num_negative_samples: int")
     .Doc(R"doc(
@@ -65,7 +67,7 @@ w_out: output word embedding.
 examples: A vector of word ids.
 labels: A vector of word ids.
 vocab_count: Count of words in the vocabulary.
-num_negative_samples: Number of negative samples per exaple.
+num_negative_samples: Number of negative samples per example.
 )doc");
 
 }  // end namespace tensorflow

@@ -1,4 +1,4 @@
-# Copyright 2015 Google Inc. All Rights Reserved.
+# Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,8 +22,6 @@ for the __future__ division line.
 from __future__ import absolute_import
 # from __future__ import division  # Intentionally skip this import
 from __future__ import print_function
-
-import tensorflow.python.platform
 
 import numpy as np
 import tensorflow as tf

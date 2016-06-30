@@ -1,4 +1,4 @@
-# Copyright 2015 Google Inc. All Rights Reserved.
+# Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,8 +17,6 @@
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
-
-import tensorflow.python.platform
 
 import numpy as np
 from six.moves import xrange  # pylint: disable=redefined-builtin
@@ -84,8 +82,11 @@ class ReverseSequenceTest(tf.test.TestCase):
   def testInt64Basic(self):
     self._testBasic(np.int64)
 
-  def testSComplexBasic(self):
+  def testComplex64Basic(self):
     self._testBasic(np.complex64)
+
+  def testComplex128Basic(self):
+    self._testBasic(np.complex128)
 
   def testFloatReverseSequenceGrad(self):
     x = np.asarray([
@@ -116,6 +117,12 @@ class ReverseSequenceTest(tf.test.TestCase):
     self.assertLess(err, 1e-8)
 
   def testShapeFunctionEdgeCases(self):
+    t = tf.reverse_sequence(
+        tf.placeholder(tf.float32, shape=None),
+        seq_lengths=tf.placeholder(tf.int64, shape=(32,)),
+        batch_dim=0, seq_dim=1)
+    self.assertIs(t.get_shape().ndims, None)
+
     # Batch size mismatched between input and seq_lengths.
     with self.assertRaises(ValueError):
       tf.reverse_sequence(

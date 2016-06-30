@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,16 +20,17 @@ limitations under the License.
 #include <jni.h>
 #include <stdlib.h>
 
-#include <string>
-#include <vector>
 #include <fstream>
 #include <sstream>
+#include <string>
+#include <vector>
 
 #include "google/protobuf/io/coded_stream.h"
 #include "google/protobuf/io/zero_copy_stream_impl.h"
 #include "google/protobuf/io/zero_copy_stream_impl_lite.h"
 #include "google/protobuf/message_lite.h"
 #include "tensorflow/core/platform/logging.h"
+#include "tensorflow/examples/android/jni/limiting_file_input_stream.h"
 
 static const char* const ASSET_PREFIX = "file:///android_asset/";
 
@@ -51,6 +52,7 @@ class IfstreamInputStream : public ::google::protobuf::io::CopyingInputStream {
  private:
   std::ifstream ifs_;
 };
+
 }  // namespace
 
 bool PortableReadFileToProto(const std::string& file_name,
@@ -85,9 +87,8 @@ void ReadFileToProto(AAssetManager* const asset_manager,
   CHECK_NOTNULL(asset_manager);
 
   const char* const asset_filename = filename + strlen(ASSET_PREFIX);
-  AAsset* asset = AAssetManager_open(asset_manager,
-                                     asset_filename,
-                                     AASSET_MODE_STREAMING);
+  AAsset* asset =
+      AAssetManager_open(asset_manager, asset_filename, AASSET_MODE_STREAMING);
   CHECK_NOTNULL(asset);
 
   off_t start;
@@ -95,20 +96,28 @@ void ReadFileToProto(AAssetManager* const asset_manager,
   const int fd = AAsset_openFileDescriptor(asset, &start, &length);
 
   if (fd >= 0) {
-    // If it has a file descriptor that means it can be memmapped directly
-    // from the APK.
-    VLOG(0) << "Opening asset " << asset_filename
-            << " from disk with zero-copy.";
-    google::protobuf::io::FileInputStream is(fd);
-    google::protobuf::io::LimitingInputStream lis(&is, start + length);
-    lis.Skip(start);
-    CHECK(message->ParseFromZeroCopyStream(&lis));
-    is.Close();
+    ::tensorflow::android::LimitingFileInputStream is(fd, start + length);
+    google::protobuf::io::CopyingInputStreamAdaptor adaptor(&is);
+    // If the file is smaller than protobuf's default limit, avoid copies.
+    if (length < (64 * 1024 * 1024)) {
+      // If it has a file descriptor that means it can be memmapped directly
+      // from the APK.
+      VLOG(0) << "Opening asset " << asset_filename
+              << " from disk with zero-copy.";
+      adaptor.Skip(start);
+      CHECK(message->ParseFromZeroCopyStream(&adaptor));
+    } else {
+      ::google::protobuf::io::CodedInputStream coded_stream(&adaptor);
+      // Total bytes hard limit / warning limit are set to 1GB and 512MB
+      // respectively.
+      coded_stream.SetTotalBytesLimit(1024LL << 20, 512LL << 20);
+      coded_stream.Skip(start);
+      CHECK(message->ParseFromCodedStream(&coded_stream));
+    }
   } else {
     // It may be compressed, in which case we have to uncompress
     // it to memory first.
-    VLOG(0) << "Opening asset " << asset_filename
-            << " from disk with copy.";
+    VLOG(0) << "Opening asset " << asset_filename << " from disk with copy.";
     const off_t data_size = AAsset_getLength(asset);
     const void* const memory = AAsset_getBuffer(asset);
     CHECK(message->ParseFromArray(memory, data_size));
@@ -122,7 +131,7 @@ void ReadFileToString(AAssetManager* const asset_manager,
     VLOG(0) << "Opening file: " << filename;
     std::ifstream t(filename);
     std::string tmp((std::istreambuf_iterator<char>(t)),
-                     std::istreambuf_iterator<char>());
+                    std::istreambuf_iterator<char>());
     tmp.swap(*str);
     t.close();
     return;
@@ -130,9 +139,8 @@ void ReadFileToString(AAssetManager* const asset_manager,
 
   CHECK_NOTNULL(asset_manager);
   const char* const asset_filename = filename + strlen(ASSET_PREFIX);
-  AAsset* asset = AAssetManager_open(asset_manager,
-                                     asset_filename,
-                                     AASSET_MODE_STREAMING);
+  AAsset* asset =
+      AAssetManager_open(asset_manager, asset_filename, AASSET_MODE_STREAMING);
   CHECK_NOTNULL(asset);
   VLOG(0) << "Opening asset " << asset_filename << " from disk with copy.";
   const off_t data_size = AAsset_getLength(asset);
@@ -157,3 +165,17 @@ void ReadFileToVector(AAssetManager* const asset_manager,
   VLOG(0) << "Read " << str_vector->size() << " values from " << filename;
 }
 
+void WriteProtoToFile(const char* const filename,
+                      const google::protobuf::MessageLite& message) {
+  std::fstream outfile;
+  outfile.open(filename, std::fstream::binary | std::fstream::out);
+  std::string serialized;
+  message.SerializeToString(&serialized);
+  outfile.write(serialized.c_str(), serialized.size());
+  outfile.close();
+  if (outfile.fail()) {
+    LOG(WARNING) << "Failed to write proto to " << filename;
+    return;
+  }
+  VLOG(0) << "Wrote proto to " << filename;
+}

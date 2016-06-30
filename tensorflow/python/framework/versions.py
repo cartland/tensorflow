@@ -1,4 +1,4 @@
-# Copyright 2015 Google Inc. All Rights Reserved.
+# Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,15 +19,15 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import tensorflow.python.platform
-
 from tensorflow.python import pywrap_tensorflow
 
 __version__ = pywrap_tensorflow.__version__
 GRAPH_DEF_VERSION = pywrap_tensorflow.GRAPH_DEF_VERSION
-GRAPH_DEF_VERSION_MIN = pywrap_tensorflow.GRAPH_DEF_VERSION_MIN
-GRAPH_DEF_VERSION_MAX = pywrap_tensorflow.GRAPH_DEF_VERSION_MAX
+GRAPH_DEF_VERSION_MIN_CONSUMER = (
+    pywrap_tensorflow.GRAPH_DEF_VERSION_MIN_CONSUMER)
+GRAPH_DEF_VERSION_MIN_PRODUCER = (
+    pywrap_tensorflow.GRAPH_DEF_VERSION_MIN_PRODUCER)
 
 # Make sure these symbols are exported even though one starts with _.
-__all__ = ["__version__", "GRAPH_DEF_VERSION", "GRAPH_DEF_VERSION_MIN",
-           "GRAPH_DEF_VERSION_MAX"]
+__all__ = ["__version__", "GRAPH_DEF_VERSION", "GRAPH_DEF_VERSION_MIN_CONSUMER",
+           "GRAPH_DEF_VERSION_MIN_PRODUCER"]

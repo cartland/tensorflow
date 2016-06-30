@@ -3,7 +3,7 @@
 # Tensor Transformations
 
 Note: Functions taking `Tensor` arguments can also take anything accepted by
-[`tf.convert_to_tensor`](../../api_docs/python/framework.md#convert_to_tensor).
+[`tf.convert_to_tensor`](framework.md#convert_to_tensor).
 
 [TOC]
 
@@ -178,6 +178,28 @@ tf.cast(a, tf.int32) ==> [1, 2]  # dtype=tf.int32
 *  <b>`TypeError`</b>: If `x` cannot be cast to the `dtype`.
 
 
+- - -
+
+### `tf.saturate_cast(value, dtype, name=None)` {#saturate_cast}
+
+Performs a safe saturating cast of `value` to `dtype`.
+
+This function casts the input to `dtype` without applying any scaling.  If
+there is a danger that values would over or underflow in the cast, this op
+applies the appropriate clamping before the cast.
+
+##### Args:
+
+
+*  <b>`value`</b>: A `Tensor`.
+*  <b>`dtype`</b>: The desired output `DType`.
+*  <b>`name`</b>: A name for the operation (optional).
+
+##### Returns:
+
+  `value` safely cast to `dtype`.
+
+
 
 ## Shapes and Shaping
 
@@ -194,7 +216,7 @@ This operation returns a 1-D integer tensor representing the shape of `input`.
 
 For example:
 
-```prettyprint
+```python
 # 't' is [[[1, 1, 1], [2, 2, 2]], [[3, 3, 3], [4, 4, 4]]]
 shape(t) ==> [2, 2, 3]
 ```
@@ -202,7 +224,7 @@ shape(t) ==> [2, 2, 3]
 ##### Args:
 
 
-*  <b>`input`</b>: A `Tensor`.
+*  <b>`input`</b>: A `Tensor` or `SparseTensor`.
 *  <b>`name`</b>: A name for the operation (optional).
 
 ##### Returns:
@@ -221,15 +243,15 @@ This operation returns an integer representing the number of elements in
 
 For example:
 
-```prettyprint
-# 't' is [[[1, 1,, 1], [2, 2, 2]], [[3, 3, 3], [4, 4, 4]]]]
+```python
+# 't' is [[[1, 1, 1], [2, 2, 2]], [[3, 3, 3], [4, 4, 4]]]]
 size(t) ==> 12
 ```
 
 ##### Args:
 
 
-*  <b>`input`</b>: A `Tensor`.
+*  <b>`input`</b>: A `Tensor` or `SparseTensor`.
 *  <b>`name`</b>: A name for the operation (optional).
 
 ##### Returns:
@@ -247,20 +269,20 @@ This operation returns an integer representing the rank of `input`.
 
 For example:
 
-```prettyprint
+```python
 # 't' is [[[1, 1, 1], [2, 2, 2]], [[3, 3, 3], [4, 4, 4]]]
 # shape of tensor 't' is [2, 2, 3]
 rank(t) ==> 3
 ```
 
-**Note**: The rank of a tensor is not the same as the rank of a matrix. The rank
-of a tensor is the number of indices required to uniquely select each element
-of the tensor. Rank is also known as "order", "degree", or "ndims."
+**Note**: The rank of a tensor is not the same as the rank of a matrix. The
+rank of a tensor is the number of indices required to uniquely select each
+element of the tensor. Rank is also known as "order", "degree", or "ndims."
 
 ##### Args:
 
 
-*  <b>`input`</b>: A `Tensor`.
+*  <b>`input`</b>: A `Tensor` or `SparseTensor`.
 *  <b>`name`</b>: A name for the operation (optional).
 
 ##### Returns:
@@ -290,14 +312,14 @@ For example:
 ```prettyprint
 # tensor 't' is [1, 2, 3, 4, 5, 6, 7, 8, 9]
 # tensor 't' has shape [9]
-reshape(t, [3, 3]) ==> [[1, 2, 3]
-                        [4, 5, 6]
+reshape(t, [3, 3]) ==> [[1, 2, 3],
+                        [4, 5, 6],
                         [7, 8, 9]]
 
-# tensor 't' is [[[1, 1], [2, 2]]
+# tensor 't' is [[[1, 1], [2, 2]],
 #                [[3, 3], [4, 4]]]
 # tensor 't' has shape [2, 2, 2]
-reshape(t, [2, 4]) ==> [[1, 1, 2, 2]
+reshape(t, [2, 4]) ==> [[1, 1, 2, 2],
                         [3, 3, 4, 4]]
 
 # tensor 't' is [[[1, 1, 1],
@@ -309,9 +331,22 @@ reshape(t, [2, 4]) ==> [[1, 1, 2, 2]
 # tensor 't' has shape [3, 2, 3]
 # pass '[-1]' to flatten 't'
 reshape(t, [-1]) ==> [1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6]
-# -1 can also be used with higher dimensional shapes
+
+# -1 can also be used to infer the shape
+
+# -1 is inferred to be 9:
 reshape(t, [2, -1]) ==> [[1, 1, 1, 2, 2, 2, 3, 3, 3],
                          [4, 4, 4, 5, 5, 5, 6, 6, 6]]
+# -1 is inferred to be 2:
+reshape(t, [-1, 9]) ==> [[1, 1, 1, 2, 2, 2, 3, 3, 3],
+                         [4, 4, 4, 5, 5, 5, 6, 6, 6]]
+# -1 is inferred to be 3:
+reshape(t, [ 2, -1, 3]) ==> [[[1, 1, 1],
+                              [2, 2, 2],
+                              [3, 3, 3]],
+                             [[4, 4, 4],
+                              [5, 5, 5],
+                              [6, 6, 6]]]
 
 # tensor 't' is [7]
 # shape `[]` reshapes to a scalar
@@ -422,6 +457,51 @@ size 1.
   A `Tensor`. Has the same type as `input`.
   Contains the same data as `input`, but its shape has an additional
   dimension of size 1 added.
+
+
+- - -
+
+### `tf.meshgrid(*args, **kwargs)` {#meshgrid}
+
+Broadcasts parameters for evaluation on an N-D grid.
+
+Given N one-dimensional coordinate arrays `*args`, returns a list `outputs`
+of N-D coordinate arrays for evaluating expressions on an N-D grid.
+
+Notes:
+
+`meshgrid` supports cartesian ('xy') and matrix ('ij') indexing conventions.
+When the `indexing` argument is set to 'xy' (the default), the broadcasting
+instructions for the first two dimensions are swapped.
+
+Examples:
+
+Calling `X, Y = meshgrid(x, y)` with the tensors
+```prettyprint
+  x = [1, 2, 3]
+  y = [4, 5, 6]
+```
+results in
+```prettyprint
+  X = [[1, 1, 1],
+       [2, 2, 2],
+       [3, 3, 3]]
+  Y = [[4, 5, 6],
+       [4, 5, 6],
+       [4, 5, 6]]
+```
+
+##### Args:
+
+
+*  <b>`*args`</b>: `Tensor`s with rank 1
+*  <b>`indexing`</b>: Either 'xy' or 'ij' (optional, default: 'xy')
+*  <b>`name`</b>: A name for the operation (optional).
+
+##### Returns:
+
+
+*  <b>`outputs`</b>: A list of N `Tensor`s with rank N
 
 
 
@@ -539,43 +619,62 @@ dimension. For example, tiling `[a b c d]` by `[2]` produces
 
 - - -
 
-### `tf.pad(input, paddings, name=None)` {#pad}
+### `tf.pad(tensor, paddings, mode='CONSTANT', name=None)` {#pad}
 
-Pads a tensor with zeros.
+Pads a tensor.
 
-This operation pads a `input` with zeros according to the `paddings` you
-specify. `paddings` is an integer tensor with shape `[Dn, 2]`, where n is the
-rank of `input`. For each dimension D of `input`, `paddings[D, 0]` indicates
-how many zeros to add before the contents of `input` in that dimension, and
-`paddings[D, 1]` indicates how many zeros to add after the contents of `input`
-in that dimension.
+This operation pads a `tensor` according to the `paddings` you specify.
+`paddings` is an integer tensor with shape `[n, 2]`, where n is the rank of
+`tensor`. For each dimension D of `input`, `paddings[D, 0]` indicates how
+many values to add before the contents of `tensor` in that dimension, and
+`paddings[D, 1]` indicates how many values to add after the contents of
+`tensor` in that dimension. If `mode` is "REFLECT" then both `paddings[D, 0]`
+and `paddings[D, 1]` must be no greater than `tensor.dim_size(D) - 1`. If
+`mode` is "SYMMETRIC" then both `paddings[D, 0]` and `paddings[D, 1]` must be
+no greater than `tensor.dim_size(D)`.
 
 The padded size of each dimension D of the output is:
 
-`paddings(D, 0) + input.dim_size(D) + paddings(D, 1)`
+`paddings[D, 0] + tensor.dim_size(D) + paddings[D, 1]`
 
 For example:
 
-```prettyprint
-# 't' is [[1, 1], [2, 2]]
-# 'paddings' is [[1, 1], [2, 2]]
-# rank of 't' is 2
-pad(t, paddings) ==> [[0, 0, 0, 0, 0, 0]
-                      [0, 0, 1, 1, 0, 0]
-                      [0, 0, 2, 2, 0, 0]
-                      [0, 0, 0, 0, 0, 0]]
+```python
+# 't' is [[1, 2, 3], [4, 5, 6]].
+# 'paddings' is [[1, 1,], [2, 2]].
+# rank of 't' is 2.
+pad(t, paddings, "CONSTANT") ==> [[0, 0, 0, 0, 0, 0, 0],
+                                  [0, 0, 1, 2, 3, 0, 0],
+                                  [0, 0, 4, 5, 6, 0, 0],
+                                  [0, 0, 0, 0, 0, 0, 0]]
+
+pad(t, paddings, "REFLECT") ==> [[6, 5, 4, 5, 6, 5, 4],
+                                 [3, 2, 1, 2, 3, 2, 1],
+                                 [6, 5, 4, 5, 6, 5, 4],
+                                 [3, 2, 1, 2, 3, 2, 1]]
+
+pad(t, paddings, "SYMMETRIC") ==> [[2, 1, 1, 2, 3, 3, 2],
+                                   [2, 1, 1, 2, 3, 3, 2],
+                                   [5, 4, 4, 5, 6, 6, 5],
+                                   [5, 4, 4, 5, 6, 6, 5]]
 ```
 
 ##### Args:
 
 
-*  <b>`input`</b>: A `Tensor`.
+*  <b>`tensor`</b>: A `Tensor`.
 *  <b>`paddings`</b>: A `Tensor` of type `int32`.
+*  <b>`mode`</b>: One of "CONSTANT", "REFLECT", or "SYMMETRIC".
 *  <b>`name`</b>: A name for the operation (optional).
 
 ##### Returns:
 
-  A `Tensor`. Has the same type as `input`.
+  A `Tensor`. Has the same type as `tensor`.
+
+##### Raises:
+
+
+*  <b>`ValueError`</b>: When mode is not one of "CONSTANT", "REFLECT", or "SYMMETRIC".
 
 
 - - -
@@ -628,7 +727,7 @@ tf.shape(tf.concat(1, [t3, t4])) ==> [2, 6]
 
 - - -
 
-### `tf.pack(values, name='pack')` {#pack}
+### `tf.pack(values, axis=0, name='pack')` {#pack}
 
 Packs a list of rank-`R` tensors into one rank-`(R+1)` tensor.
 
@@ -644,6 +743,8 @@ This is the opposite of unpack.  The numpy equivalent is
 
 
 *  <b>`values`</b>: A list of `Tensor` objects with the same shape and type.
+*  <b>`axis`</b>: An `int`. The axis to pack along. Defaults to the first dimension.
+    Supports negative indexes.
 *  <b>`name`</b>: A name for this operation (optional).
 
 ##### Returns:
@@ -651,16 +752,21 @@ This is the opposite of unpack.  The numpy equivalent is
 
 *  <b>`output`</b>: A packed `Tensor` with the same type as `values`.
 
+##### Raises:
+
+
+*  <b>`ValueError`</b>: If `axis` is out of the range [-(R+1), R+1).
+
 
 - - -
 
-### `tf.unpack(value, num=None, name='unpack')` {#unpack}
+### `tf.unpack(value, num=None, axis=0, name='unpack')` {#unpack}
 
-Unpacks the outer dimension of a rank-`R` tensor into rank-`(R-1)` tensors.
+Unpacks the given dimension of a rank-`R` tensor into rank-`(R-1)` tensors.
 
-Unpacks `num` tensors from `value` along the first dimension.
+Unpacks `num` tensors from `value` along the given dimension.
 If `num` is not specified (the default), it is inferred from `value`'s shape.
-If `value.shape[0]` is not known, `ValueError` is raised.
+If `value.shape[axis]` is not known, `ValueError` is raised.
 
 The ith tensor in `output` is the slice `value[i, ...]`. Each tensor in
 `output` has shape `value.shape[1:]`.
@@ -673,8 +779,10 @@ This is the opposite of pack.  The numpy equivalent is
 
 
 *  <b>`value`</b>: A rank `R > 0` `Tensor` to be unpacked.
-*  <b>`num`</b>: An `int`. The first dimension of value. Automatically inferred if
-    `None` (the default).
+*  <b>`num`</b>: An `int`. The length of the dimension `axis`. Automatically inferred
+    if `None` (the default).
+*  <b>`axis`</b>: An `int`. The axis to unpack along. Defaults to the first
+    dimension. Supports negative indexes.
 *  <b>`name`</b>: A name for the operation (optional).
 
 ##### Returns:
@@ -685,6 +793,7 @@ This is the opposite of pack.  The numpy equivalent is
 
 
 *  <b>`ValueError`</b>: If `num` is unspecified and cannot be inferred.
+*  <b>`ValueError`</b>: If `axis` is out of the range [-R, R).
 
 
 - - -
@@ -727,6 +836,7 @@ output[3, 2:, :, ...] = input[3, 2:, :, ...]
 ```
 
 In contrast, if:
+
 ```prettyprint
 # Given this:
 batch_dim = 2
@@ -752,7 +862,7 @@ output[2:, :, 3, :, ...] = input[2:, :, 3, :, ...]
 
 *  <b>`input`</b>: A `Tensor`. The input to reverse.
 *  <b>`seq_lengths`</b>: A `Tensor` of type `int64`.
-    1-D with length `input.dims(0)` and
+    1-D with length `input.dims(batch_dim)` and
     `max(seq_lengths) < input.dims(seq_dim)`
 *  <b>`seq_dim`</b>: An `int`. The dimension which is partially reversed.
 *  <b>`batch_dim`</b>: An optional `int`. Defaults to `0`.
@@ -819,7 +929,7 @@ reverse(t, dims) ==> [[[[8, 9, 10, 11],
 ##### Args:
 
 
-*  <b>`tensor`</b>: A `Tensor`. Must be one of the following types: `uint8`, `int8`, `int32`, `bool`, `float32`, `float64`.
+*  <b>`tensor`</b>: A `Tensor`. Must be one of the following types: `uint8`, `int8`, `int32`, `bool`, `half`, `float32`, `float64`.
     Up to 8-D.
 *  <b>`dims`</b>: A `Tensor` of type `bool`. 1-D. The dimensions to reverse.
 *  <b>`name`</b>: A name for the operation (optional).
@@ -860,7 +970,7 @@ tf.transpose(x, perm=[1, 0]) ==> [[1 4]
 #           [[7  8  9]
 #            [10 11 12]]]
 # Take the transpose of the matrices in dimension-0
-tf.transpose(b, perm=[0, 2, 1]) ==> [[[1  4]
+tf.transpose(x, perm=[0, 2, 1]) ==> [[[1  4]
                                       [2  5]
                                       [3  6]]
 
@@ -883,7 +993,448 @@ tf.transpose(b, perm=[0, 2, 1]) ==> [[[1  4]
 
 - - -
 
-### `tf.gather(params, indices, name=None)` {#gather}
+### `tf.extract_image_patches(images, ksizes, strides, rates, padding, name=None)` {#extract_image_patches}
+
+Extract `patches` from `images` and put them in the "depth" output dimension.
+
+##### Args:
+
+
+*  <b>`images`</b>: A `Tensor`. Must be one of the following types: `float32`, `float64`, `int32`, `int64`, `uint8`, `int16`, `int8`, `uint16`, `half`.
+    4-D Tensor with shape `[batch, in_rows, in_cols, depth]`.
+*  <b>`ksizes`</b>: A list of `ints` that has length `>= 4`.
+    The size of the sliding window for each dimension of `images`.
+*  <b>`strides`</b>: A list of `ints` that has length `>= 4`.
+    1-D of length 4. How far the centers of two consecutive patches are in
+    the images. Must be: `[1, stride_rows, stride_cols, 1]`.
+*  <b>`rates`</b>: A list of `ints` that has length `>= 4`.
+    1-D of length 4. Must be: `[1, rate_rows, rate_cols, 1]`. This is the
+    input stride, specifying how far two consecutive patch samples are in the
+    input. Equivalent to extracting patches with
+    `patch_sizes_eff = patch_sizes + (patch_sizes - 1) * (rates - 1), followed by
+    subsampling them spatially by a factor of `rates`.
+*  <b>`padding`</b>: A `string` from: `"SAME", "VALID"`.
+    The type of padding algorithm to use.
+
+    We specify the size-related attributes as:
+
+          ksizes = [1, ksize_rows, ksize_cols, 1]
+          strides = [1, strides_rows, strides_cols, 1]
+          rates = [1, rates_rows, rates_cols, 1]
+
+*  <b>`name`</b>: A name for the operation (optional).
+
+##### Returns:
+
+  A `Tensor`. Has the same type as `images`.
+  4-D Tensor with shape `[batch, out_rows, out_cols, ksize_rows *
+  ksize_cols * depth]` containing image patches with size
+  `ksize_rows x ksize_cols x depth` vectorized in the "depth" dimension.
+
+
+- - -
+
+### `tf.space_to_batch(input, paddings, block_size, name=None)` {#space_to_batch}
+
+SpaceToBatch for 4-D tensors of type T.
+
+Zero-pads and then rearranges (permutes) blocks of spatial data into batch.
+More specifically, this op outputs a copy of the input tensor where values from
+the `height` and `width` dimensions are moved to the `batch` dimension. After
+the zero-padding, both `height` and `width` of the input must be divisible by the
+block size.
+
+##### Args:
+
+
+*  <b>`input`</b>: A `Tensor`. 4-D with shape `[batch, height, width, depth]`.
+*  <b>`paddings`</b>: A `Tensor` of type `int32`.
+    2-D tensor of non-negative integers with shape `[2, 2]`. It specifies
+      the padding of the input with zeros across the spatial dimensions as follows:
+
+          paddings = [[pad_top, pad_bottom], [pad_left, pad_right]]
+
+      The effective spatial dimensions of the zero-padded input tensor will be:
+
+          height_pad = pad_top + height + pad_bottom
+          width_pad = pad_left + width + pad_right
+
+    The attr `block_size` must be greater than one. It indicates the block size.
+
+      * Non-overlapping blocks of size `block_size x block size` in the height and
+        width dimensions are rearranged into the batch dimension at each location.
+      * The batch of the output tensor is `batch * block_size * block_size`.
+      * Both height_pad and width_pad must be divisible by block_size.
+
+    The shape of the output will be:
+
+        [batch*block_size*block_size, height_pad/block_size, width_pad/block_size,
+         depth]
+
+    Some examples:
+
+    (1) For the following input of shape `[1, 2, 2, 1]` and block_size of 2:
+
+    ```prettyprint
+    x = [[[[1], [2]], [[3], [4]]]]
+    ```
+
+    The output tensor has shape `[4, 1, 1, 1]` and value:
+
+    ```prettyprint
+    [[[[1]]], [[[2]]], [[[3]]], [[[4]]]]
+    ```
+
+    (2) For the following input of shape `[1, 2, 2, 3]` and block_size of 2:
+
+    ```prettyprint
+    x = [[[[1, 2, 3], [4, 5, 6]],
+          [[7, 8, 9], [10, 11, 12]]]]
+    ```
+
+    The output tensor has shape `[4, 1, 1, 3]` and value:
+
+    ```prettyprint
+    [[[1, 2, 3]], [[4, 5, 6]], [[7, 8, 9]], [[10, 11, 12]]]
+    ```
+
+    (3) For the following input of shape `[1, 4, 4, 1]` and block_size of 2:
+
+    ```prettyprint
+    x = [[[[1],   [2],  [3],  [4]],
+          [[5],   [6],  [7],  [8]],
+          [[9],  [10], [11],  [12]],
+          [[13], [14], [15],  [16]]]]
+    ```
+
+    The output tensor has shape `[4, 2, 2, 1]` and value:
+
+    ```prettyprint
+    x = [[[[1], [3]], [[5], [7]]],
+         [[[2], [4]], [[10], [12]]],
+         [[[5], [7]], [[13], [15]]],
+         [[[6], [8]], [[14], [16]]]]
+    ```
+
+    (4) For the following input of shape `[2, 2, 4, 1]` and block_size of 2:
+
+    ```prettyprint
+    x = [[[[1],   [2],  [3],  [4]],
+          [[5],   [6],  [7],  [8]]],
+         [[[9],  [10], [11],  [12]],
+          [[13], [14], [15],  [16]]]]
+    ```
+
+    The output tensor has shape `[8, 1, 2, 1]` and value:
+
+    ```prettyprint
+    x = [[[[1], [3]]], [[[9], [11]]], [[[2], [4]]], [[[10], [12]]],
+         [[[5], [7]]], [[[13], [15]]], [[[6], [8]]], [[[14], [16]]]]
+    ```
+
+    Among others, this operation is useful for reducing atrous convolution into
+    regular convolution.
+
+*  <b>`block_size`</b>: An `int` that is `>= 2`.
+*  <b>`name`</b>: A name for the operation (optional).
+
+##### Returns:
+
+  A `Tensor`. Has the same type as `input`.
+
+
+- - -
+
+### `tf.batch_to_space(input, crops, block_size, name=None)` {#batch_to_space}
+
+BatchToSpace for 4-D tensors of type T.
+
+Rearranges (permutes) data from batch into blocks of spatial data, followed by
+cropping. This is the reverse transformation of SpaceToBatch. More specifically,
+this op outputs a copy of the input tensor where values from the `batch`
+dimension are moved in spatial blocks to the `height` and `width` dimensions,
+followed by cropping along the `height` and `width` dimensions.
+
+##### Args:
+
+
+*  <b>`input`</b>: A `Tensor`. 4-D tensor with shape
+    `[batch*block_size*block_size, height_pad/block_size, width_pad/block_size,
+      depth]`. Note that the batch size of the input tensor must be divisible by
+    `block_size * block_size`.
+*  <b>`crops`</b>: A `Tensor` of type `int32`.
+    2-D tensor of non-negative integers with shape `[2, 2]`. It specifies
+    how many elements to crop from the intermediate result across the spatial
+    dimensions as follows:
+
+        crops = [[crop_top, crop_bottom], [crop_left, crop_right]]
+
+*  <b>`block_size`</b>: An `int` that is `>= 2`.
+*  <b>`name`</b>: A name for the operation (optional).
+
+##### Returns:
+
+  A `Tensor`. Has the same type as `input`.
+  4-D with shape `[batch, height, width, depth]`, where:
+
+        height = height_pad - crop_top - crop_bottom
+        width = width_pad - crop_left - crop_right
+
+  The attr `block_size` must be greater than one. It indicates the block size.
+
+  Some examples:
+
+  (1) For the following input of shape `[4, 1, 1, 1]` and block_size of 2:
+
+  ```prettyprint
+  [[[[1]]], [[[2]]], [[[3]]], [[[4]]]]
+  ```
+
+  The output tensor has shape `[1, 2, 2, 1]` and value:
+
+  ```prettyprint
+  x = [[[[1], [2]], [[3], [4]]]]
+  ```
+
+  (2) For the following input of shape `[4, 1, 1, 3]` and block_size of 2:
+
+  ```prettyprint
+  [[[1, 2, 3]], [[4, 5, 6]], [[7, 8, 9]], [[10, 11, 12]]]
+  ```
+
+  The output tensor has shape `[1, 2, 2, 3]` and value:
+
+  ```prettyprint
+  x = [[[[1, 2, 3], [4, 5, 6]],
+        [[7, 8, 9], [10, 11, 12]]]]
+  ```
+
+  (3) For the following input of shape `[4, 2, 2, 1]` and block_size of 2:
+
+  ```prettyprint
+  x = [[[[1], [3]], [[5], [7]]],
+       [[[2], [4]], [[10], [12]]],
+       [[[5], [7]], [[13], [15]]],
+       [[[6], [8]], [[14], [16]]]]
+  ```
+
+  The output tensor has shape `[1, 4, 4, 1]` and value:
+
+  ```prettyprint
+  x = [[[1],   [2],  [3],  [4]],
+       [[5],   [6],  [7],  [8]],
+       [[9],  [10], [11],  [12]],
+       [[13], [14], [15],  [16]]]
+  ```
+
+  (4) For the following input of shape `[8, 1, 2, 1]` and block_size of 2:
+
+  ```prettyprint
+  x = [[[[1], [3]]], [[[9], [11]]], [[[2], [4]]], [[[10], [12]]],
+       [[[5], [7]]], [[[13], [15]]], [[[6], [8]]], [[[14], [16]]]]
+  ```
+
+  The output tensor has shape `[2, 2, 4, 1]` and value:
+
+  ```prettyprint
+  x = [[[[1], [3]], [[5], [7]]],
+       [[[2], [4]], [[10], [12]]],
+       [[[5], [7]], [[13], [15]]],
+       [[[6], [8]], [[14], [16]]]]
+  ```
+
+
+- - -
+
+### `tf.space_to_depth(input, block_size, name=None)` {#space_to_depth}
+
+SpaceToDepth for tensors of type T.
+
+Rearranges blocks of spatial data, into depth. More specifically,
+this op outputs a copy of the input tensor where values from the `height`
+and `width` dimensions are moved to the `depth` dimension.
+The attr `block_size` indicates the input block size and how the data is moved.
+
+  * Non-overlapping blocks of size `block_size x block size` are rearranged
+    into depth at each location.
+  * The depth of the output tensor is `input_depth * block_size * block_size`.
+  * The input tensor's height and width must be divisible by block_size.
+
+That is, assuming the input is in the shape:
+`[batch, height, width, depth]`,
+the shape of the output will be:
+`[batch, height/block_size, width/block_size, depth*block_size*block_size]`
+
+This operation requires that the input tensor be of rank 4, and that
+`block_size` be >=1 and a divisor of both the input `height` and `width`.
+
+This operation is useful for resizing the activations between convolutions
+(but keeping all data), e.g. instead of pooling. It is also useful for training
+purely convolutional models.
+
+For example, given this input of shape `[1, 2, 2, 1]`, and block_size of 2:
+
+```prettyprint
+x = [[[[1], [2]],
+      [[3], [4]]]]
+```
+
+This operation will output a tensor of shape `[1, 1, 1, 4]`:
+
+```prettyprint
+[[[[1, 2, 3, 4]]]]
+```
+
+Here, the input has a batch of 1 and each batch element has shape `[2, 2, 1]`,
+the corresponding output will have a single element (i.e. width and height are
+both 1) and will have a depth of 4 channels (1 * block_size * block_size).
+The output element shape is `[1, 1, 4]`.
+
+For an input tensor with larger depth, here of shape `[1, 2, 2, 3]`, e.g.
+
+```prettyprint
+x = [[[[1, 2, 3], [4, 5, 6]],
+      [[7, 8, 9], [10, 11, 12]]]]
+```
+
+This operation, for block_size of 2, will return the following tensor of shape
+`[1, 1, 1, 12]`
+
+```prettyprint
+[[[[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]]]]
+```
+
+Similarly, for the following input of shape `[1 4 4 1]`, and a block size of 2:
+
+```prettyprint
+x = [[[[1],   [2],  [5],  [6]],
+      [[3],   [4],  [7],  [8]],
+      [[9],  [10], [13],  [14]],
+      [[11], [12], [15],  [16]]]]
+```
+
+the operator will return the following tensor of shape `[1 2 2 4]`:
+
+```prettyprint
+x = [[[[1, 2, 3, 4],
+       [5, 6, 7, 8]],
+      [[9, 10, 11, 12],
+       [13, 14, 15, 16]]]]
+```
+
+##### Args:
+
+
+*  <b>`input`</b>: A `Tensor`.
+*  <b>`block_size`</b>: An `int` that is `>= 2`. The size of the spatial block.
+*  <b>`name`</b>: A name for the operation (optional).
+
+##### Returns:
+
+  A `Tensor`. Has the same type as `input`.
+
+
+- - -
+
+### `tf.depth_to_space(input, block_size, name=None)` {#depth_to_space}
+
+DepthToSpace for tensors of type T.
+
+Rearranges data from depth into blocks of spatial data.
+This is the reverse transformation of SpaceToDepth. More specifically,
+this op outputs a copy of the input tensor where values from the `depth`
+dimension are moved in spatial blocks to the `height` and `width` dimensions.
+The attr `block_size` indicates the input block size and how the data is moved.
+
+  * Chunks of data of size `block_size * block_size` from depth are rearranged
+    into non-overlapping blocks of size `block_size x block_size`
+  * The width the output tensor is `input_depth * block_size`, whereas the
+    height is `input_height * block_size`.
+  * The depth of the input tensor must be divisible by
+    `block_size * block_size`.
+
+That is, assuming the input is in the shape:
+`[batch, height, width, depth]`,
+the shape of the output will be:
+`[batch, height*block_size, width*block_size, depth/(block_size*block_size)]`
+
+This operation requires that the input tensor be of rank 4, and that
+`block_size` be >=1 and that `block_size * block_size` be a divisor of the
+input depth.
+
+This operation is useful for resizing the activations between convolutions
+(but keeping all data), e.g. instead of pooling. It is also useful for training
+purely convolutional models.
+
+For example, given this input of shape `[1, 1, 1, 4]`, and a block size of 2:
+
+```prettyprint
+x = [[[[1, 2, 3, 4]]]]
+
+```
+
+This operation will output a tensor of shape `[1, 2, 2, 1]`:
+
+```prettyprint
+   [[[[1], [2]],
+     [[3], [4]]]]
+```
+
+Here, the input has a batch of 1 and each batch element has shape `[1, 1, 4]`,
+the corresponding output will have 2x2 elements and will have a depth of
+1 channel (1 = `4 / (block_size * block_size)`).
+The output element shape is `[2, 2, 1]`.
+
+For an input tensor with larger depth, here of shape `[1, 1, 1, 12]`, e.g.
+
+```prettyprint
+x = [[[[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]]]]
+```
+
+This operation, for block size of 2, will return the following tensor of shape
+`[1, 2, 2, 3]`
+
+```prettyprint
+   [[[[1, 2, 3], [4, 5, 6]],
+     [[7, 8, 9], [10, 11, 12]]]]
+
+```
+
+Similarly, for the following input of shape `[1 2 2 4]`, and a block size of 2:
+
+```prettyprint
+x =  [[[[1, 2, 3, 4],
+       [5, 6, 7, 8]],
+      [[9, 10, 11, 12],
+       [13, 14, 15, 16]]]]
+```
+
+the operator will return the following tensor of shape `[1 4 4 1]`:
+
+```prettyprint
+x = [[ [1],   [2],  [5],  [6]],
+     [ [3],   [4],  [7],  [8]],
+     [ [9],  [10], [13],  [14]],
+     [ [11], [12], [15],  [16]]]
+
+```
+
+##### Args:
+
+
+*  <b>`input`</b>: A `Tensor`.
+*  <b>`block_size`</b>: An `int` that is `>= 2`.
+    The size of the spatial block, same as in Space2Depth.
+*  <b>`name`</b>: A name for the operation (optional).
+
+##### Returns:
+
+  A `Tensor`. Has the same type as `input`.
+
+
+- - -
+
+### `tf.gather(params, indices, validate_indices=None, name=None)` {#gather}
 
 Gather slices from `params` according to `indices`.
 
@@ -911,11 +1462,45 @@ this operation will permute `params` accordingly.
 
 *  <b>`params`</b>: A `Tensor`.
 *  <b>`indices`</b>: A `Tensor`. Must be one of the following types: `int32`, `int64`.
+*  <b>`validate_indices`</b>: An optional `bool`. Defaults to `True`.
 *  <b>`name`</b>: A name for the operation (optional).
 
 ##### Returns:
 
   A `Tensor`. Has the same type as `params`.
+
+
+- - -
+
+### `tf.gather_nd(params, indices, name=None)` {#gather_nd}
+
+Gather values from `params` according to `indices`.
+
+`indices` must be integer tensor, containing indices into `params`.
+It must be shape `[d_0, ..., d_N, R]` where `R` is the rank of `params`.
+The innermost dimension of `indices` (with length `R`) corresponds to the
+indices of `params`.
+
+Produces an output tensor with shape `[d_0, ..., d_{n-1}]` where:
+
+    output[i, j, k, ...] = params[indices[i, j, k, ..., :]]
+
+e.g. for `indices` a matrix:
+
+    output[i] = params[indices[i, :]]
+
+##### Args:
+
+
+*  <b>`params`</b>: A `Tensor`. R-D.  The tensor from which to gather values.
+*  <b>`indices`</b>: A `Tensor`. Must be one of the following types: `int32`, `int64`.
+    (N+1)-D.  Index tensor having shape `[d_0, ..., d_N, R]`.
+*  <b>`name`</b>: A name for the operation (optional).
+
+##### Returns:
+
+  A `Tensor`. Has the same type as `params`.
+  N-D.  Values from `params` gathered from indices given by `indices`.
 
 
 - - -
@@ -1025,5 +1610,274 @@ For example:
 ##### Returns:
 
   A `Tensor`. Has the same type as `data`.
+
+
+- - -
+
+### `tf.boolean_mask(tensor, mask, name='boolean_mask')` {#boolean_mask}
+
+Apply boolean mask to tensor.  Numpy equivalent is `tensor[mask]`.
+
+```python
+# 1-D example
+tensor = [0, 1, 2, 3]
+mask = [True, False, True, False]
+boolean_mask(tensor, mask) ==> [0, 2]
+```
+
+In general, `0 < dim(mask) = K <= dim(tensor)`, and `mask`'s shape must match
+the first K dimensions of `tensor`'s shape.  We then have:
+  `boolean_mask(tensor, mask)[i, j1,...,jd] = tensor[i1,...,iK,j1,...,jd]`
+where `(i1,...,iK)` is the ith `True` entry of `mask` (row-major order).
+
+##### Args:
+
+
+*  <b>`tensor`</b>: N-D tensor.
+*  <b>`mask`</b>: K-D boolean tensor, K <= N and K must be known statically.
+*  <b>`name`</b>: A name for this operation (optional).
+
+##### Returns:
+
+  Tensor populated by entries in `tensor` corresponding to `True` values in
+    `mask`.
+
+##### Raises:
+
+
+*  <b>`ValueError`</b>: If shapes do not conform.
+
+
+*  <b>`Examples`</b>: 
+
+```python
+# 2-D example
+tensor = [[1, 2], [3, 4], [5, 6]]
+mask = [True, False, True]
+boolean_mask(tensor, mask) ==> [[1, 2], [5, 6]]
+```
+
+
+- - -
+
+### `tf.one_hot(indices, depth, on_value=None, off_value=None, axis=None, dtype=None, name=None)` {#one_hot}
+
+Returns a one-hot tensor.
+
+The locations represented by indices in `indices` take value `on_value`,
+while all other locations take value `off_value`.
+
+`on_value` and `off_value` must have matching data types. If `dtype` is also
+provided, they must be the same data type as specified by `dtype`.
+
+If `on_value` is not provided, it will default to the value `1` with type
+`dtype`
+
+If `off_value` is not provided, it will default to the value `0` with type
+`dtype`
+
+If the input `indices` is rank `N`, the output will have rank `N+1`. The
+new axis is created at dimension `axis` (default: the new axis is appended
+at the end).
+
+If `indices` is a scalar the output shape will be a vector of length `depth`
+
+If `indices` is a vector of length `features`, the output shape will be:
+```
+  features x depth if axis == -1
+  depth x features if axis == 0
+```
+
+If `indices` is a matrix (batch) with shape `[batch, features]`, the output
+shape will be:
+```
+  batch x features x depth if axis == -1
+  batch x depth x features if axis == 1
+  depth x batch x features if axis == 0
+```
+
+If `dtype` is not provided, it will attempt to assume the data type of
+`on_value` or `off_value`, if one or both are passed in. If none of
+`on_value`, `off_value`, or `dtype` are provided, `dtype` will default to the
+value `tf.float32`
+
+Note: If a non-numeric data type output is desired (tf.string, tf.bool, etc.),
+both `on_value` and `off_value` _must_ be provided to `one_hot`
+
+Examples
+=========
+
+Suppose that
+
+```
+  indices = [0, 2, -1, 1]
+  depth = 3
+  on_value = 5.0
+  off_value = 0.0
+  axis = -1
+```
+
+Then output is `[4 x 3]`:
+
+```
+  output =
+  [5.0 0.0 0.0]  // one_hot(0)
+  [0.0 0.0 5.0]  // one_hot(2)
+  [0.0 0.0 0.0]  // one_hot(-1)
+  [0.0 5.0 0.0]  // one_hot(1)
+```
+
+Suppose that
+
+```
+  indices = [[0, 2], [1, -1]]
+  depth = 3
+  on_value = 1.0
+  off_value = 0.0
+  axis = -1
+```
+
+Then output is `[2 x 2 x 3]`:
+
+```
+  output =
+  [
+    [1.0, 0.0, 0.0]  // one_hot(0)
+    [0.0, 0.0, 1.0]  // one_hot(2)
+  ][
+    [0.0, 1.0, 0.0]  // one_hot(1)
+    [0.0, 0.0, 0.0]  // one_hot(-1)
+  ]
+```
+
+Using default values for `on_value` and `off_value`:
+
+```
+  indices = [0, 1, 2]
+  depth = 3
+```
+
+The output will be
+
+```
+  output =
+  [[1., 0., 0.],
+   [0., 1., 0.],
+   [0., 0., 1.]]
+```
+
+##### Args:
+
+
+*  <b>`indices`</b>: A `Tensor` of indices.
+*  <b>`depth`</b>: A scalar defining the depth of the one hot dimension.
+*  <b>`on_value`</b>: A scalar defining the value to fill in output when `indices[j]
+    = i`. (default: 1)
+*  <b>`off_value`</b>: A scalar defining the value to fill in output when `indices[j]
+    != i`. (default: 0)
+*  <b>`axis`</b>: The axis to fill (default: -1, a new inner-most axis).
+*  <b>`dtype`</b>: The data type of the output tensor.
+
+##### Returns:
+
+
+*  <b>`output`</b>: The one-hot tensor.
+
+##### Raises:
+
+
+*  <b>`TypeError`</b>: If dtype of either `on_value` or `off_value` don't match `dtype`
+*  <b>`TypeError`</b>: If dtype of `on_value` and `off_value` don't match one another
+
+
+
+## Other Functions and Classes
+- - -
+
+### `tf.bitcast(input, type, name=None)` {#bitcast}
+
+Bitcasts a tensor from one type to another without copying data.
+
+Given a tensor `input`, this operation returns a tensor that has the same buffer
+data as `input` with datatype `type`.
+
+If the input datatype `T` is larger than the output datatype `type` then the
+shape changes from [...] to [..., sizeof(`T`)/sizeof(`type`)].
+
+If `T` is smaller than `type`, the operator requires that the rightmost
+dimension be equal to sizeof(`type`)/sizeof(`T`). The shape then goes from
+[..., sizeof(`type`)/sizeof(`T`)] to [...].
+
+*NOTE*: Bitcast is implemented as a low-level cast, so machines with different
+endian orderings will give different results.
+
+##### Args:
+
+
+*  <b>`input`</b>: A `Tensor`. Must be one of the following types: `float32`, `float64`, `int64`, `int32`, `uint8`, `uint16`, `int16`, `int8`, `complex64`, `complex128`, `qint8`, `quint8`, `qint32`, `half`.
+*  <b>`type`</b>: A `tf.DType` from: `tf.float32, tf.float64, tf.int64, tf.int32, tf.uint8, tf.uint16, tf.int16, tf.int8, tf.complex64, tf.complex128, tf.qint8, tf.quint8, tf.qint32, tf.half`.
+*  <b>`name`</b>: A name for the operation (optional).
+
+##### Returns:
+
+  A `Tensor` of type `type`.
+
+
+- - -
+
+### `tf.shape_n(input, name=None)` {#shape_n}
+
+Returns shape of tensors.
+
+This operation returns N 1-D integer tensors representing shape of `input[i]s`.
+
+##### Args:
+
+
+*  <b>`input`</b>: A list of at least 1 `Tensor` objects of the same type.
+*  <b>`name`</b>: A name for the operation (optional).
+
+##### Returns:
+
+  A list with the same number of `Tensor` objects as `input` of `Tensor` objects of type `int32`.
+
+
+- - -
+
+### `tf.unique_with_counts(x, name=None)` {#unique_with_counts}
+
+Finds unique elements in a 1-D tensor.
+
+This operation returns a tensor `y` containing all of the unique elements of `x`
+sorted in the same order that they occur in `x`. This operation also returns a
+tensor `idx` the same size as `x` that contains the index of each value of `x`
+in the unique output `y`. Finally, it returns a third tensor `count` that
+contains the count of each element of `y` in `x`. In other words:
+
+`y[idx[i]] = x[i] for i in [0, 1,...,rank(x) - 1]`
+
+For example:
+
+```prettyprint
+# tensor 'x' is [1, 1, 2, 4, 4, 4, 7, 8, 8]
+y, idx, count = unique_with_counts(x)
+y ==> [1, 2, 4, 7, 8]
+idx ==> [0, 0, 1, 2, 2, 2, 3, 4, 4]
+count ==> [2, 1, 3, 1, 2]
+```
+
+##### Args:
+
+
+*  <b>`x`</b>: A `Tensor`. 1-D.
+*  <b>`name`</b>: A name for the operation (optional).
+
+##### Returns:
+
+  A tuple of `Tensor` objects (y, idx, count).
+
+*  <b>`y`</b>: A `Tensor`. Has the same type as `x`. 1-D.
+*  <b>`idx`</b>: A `Tensor` of type `int32`. 1-D.
+*  <b>`count`</b>: A `Tensor` of type `int32`. 1-D.
 
 

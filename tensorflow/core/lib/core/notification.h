@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,8 +17,11 @@ limitations under the License.
 #define TENSORFLOW_UTIL_NOTIFICATION_H_
 
 #include <assert.h>
+#include <chrono>              // NOLINT
+#include <condition_variable>  // NOLINT
 
-#include "tensorflow/core/platform/port.h"
+#include "tensorflow/core/platform/mutex.h"
+#include "tensorflow/core/platform/types.h"
 
 namespace tensorflow {
 
@@ -44,6 +47,13 @@ class Notification {
     while (!notified_) {
       cv_.wait(l);
     }
+  }
+
+  bool WaitForNotificationWithTimeout(int64 timeout_in_ms) {
+    mutex_lock l(mu_);
+    std::cv_status s =
+        cv_.wait_for(l, std::chrono::milliseconds(timeout_in_ms));
+    return (s == std::cv_status::timeout) ? true : false;
   }
 
  private:

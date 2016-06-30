@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,22 +19,24 @@ limitations under the License.
 #include <functional>
 
 #include "tensorflow/core/common_runtime/device.h"
+#include "tensorflow/core/common_runtime/device_mgr.h"
 #include "tensorflow/core/framework/function.h"
 #include "tensorflow/core/graph/graph.h"
+#include "tensorflow/core/protobuf/config.pb.h"
 
 namespace tensorflow {
 
 // Creates a FunctionLibraryRuntime, which instantiates functions
 // defined in "lib_def" and executes functions on the "device".
+// "device_mgr" must contain the "device".
 //
 // The returned object does not take ownerships of "device" or
 // "lib_def".  The caller must ensure "device" and "lib_def" outlives
 // the returned object.
-typedef std::function<void()> Closure;
-typedef std::function<void(Closure)> Runner;
 FunctionLibraryRuntime* NewFunctionLibraryRuntime(
-    Device* device, Runner runner, int graph_def_version,
-    const FunctionLibraryDefinition* lib_def);
+    const DeviceMgr* device_mgr, Device* device, int graph_def_version,
+    const FunctionLibraryDefinition* lib_def,
+    const OptimizerOptions& optimizer_options);
 
 // FunctionLibraryRuntime::GetFunctionBody returns a description of an
 // instantiated function that is represented as a Graph with arg/ret
@@ -90,7 +92,11 @@ bool RemoveListArrayConverter(Graph* g);
 // multiple times by calling ExpandInlineFunctions a few times.
 bool ExpandInlineFunctions(FunctionLibraryRuntime* lib, Graph* graph);
 
-// Applies graph rewrite optimzation such as inlining, dead code
+// Dump the contents of the "graph" to log files if the logging level is
+// sufficiently high.
+void DumpGraph(StringPiece label, const Graph* g);
+
+// Applies graph rewrite optimization such as inlining, dead code
 // removal, etc.
 //
 // **g is a graph constructed based on the runtime library 'lib'.
@@ -98,6 +104,12 @@ bool ExpandInlineFunctions(FunctionLibraryRuntime* lib, Graph* graph);
 // complete copy. Therefore, the caller should not keep any references
 // to nodes *g.
 void OptimizeGraph(FunctionLibraryRuntime* lib, Graph** g);
+
+// Convert the Graph of a function to a GraphDef.
+//
+// Handles renaming of nodes to avoid duplicate names which may
+// be present after various rewriting operations.
+void ToGraphDef(const Graph* g, GraphDef* gdef, bool pretty = false);
 
 // Given a numerical function "f", returns another numerical function
 // "g", such that if "f" takes N inputs and produces M outputs, "g"

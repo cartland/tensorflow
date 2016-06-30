@@ -1,5 +1,5 @@
-#!/usr/bin/env python2
-# Copyright 2015 Google Inc. All Rights Reserved.
+#!/usr/bin/env python
+# Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -34,6 +34,8 @@ NOTES:
   //third_party/gpus/crosstool/v*/*/clang/bin/crosstool_wrapper_is_not_gcc
 """
 
+from __future__ import print_function
+
 __author__ = 'keveman@google.com (Manjunath Kudlur)'
 
 from argparse import ArgumentParser
@@ -43,16 +45,18 @@ import re
 import sys
 import pipes
 
-CURRENT_DIR = os.path.dirname(sys.argv[0])
+# "configure" uses the specific format to substitute the following string.
+# If you change it, make sure you modify "configure" as well.
 CPU_COMPILER = ('/usr/bin/gcc')
-NVCC_PATH = CURRENT_DIR + '/../../../cuda/bin/nvcc'
 GCC_HOST_COMPILER_PATH = ('/usr/bin/gcc')
+
+CURRENT_DIR = os.path.dirname(sys.argv[0])
+NVCC_PATH = CURRENT_DIR + '/../../../cuda/bin/nvcc'
 LLVM_HOST_COMPILER_PATH = ('/usr/bin/gcc')
 PREFIX_DIR = os.path.dirname(GCC_HOST_COMPILER_PATH)
 
-
 def Log(s):
-  print 'gpus/crosstool: {0}'.format(s)
+  print('gpus/crosstool: {0}'.format(s))
 
 
 def GetOptionValue(argv, option):

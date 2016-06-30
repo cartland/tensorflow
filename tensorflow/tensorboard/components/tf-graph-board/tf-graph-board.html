@@ -1,7 +1,7 @@
-<link rel="import" href="../../bower_components/polymer/polymer.html">
+<link rel="import" href="../polymer/polymer.html">
 <link rel="import" href="../tf-graph/tf-graph.html">
 <link rel="import" href="../tf-graph-info/tf-graph-info.html">
-<link rel="import" href="../../bower_components/paper-progress/paper-progress.html">
+<link rel="import" href="../paper-progress/paper-progress.html">
 <!-- Element for putting tf-graph and tf-graph-info side by side.
 
 Example
@@ -113,27 +113,30 @@ paper-progress {
 <div class$="[[_getContainerClass(progress)]]">
   <div id="main">
     <tf-graph id="graph"
-              graph-hierarchy="[[graphHierarchy]]"
-              render-hierarchy="{{_renderHierarchy}}"
+              graph-hierarchy="{{graphHierarchy}}"
+              basic-graph="[[graph]]"
+              hierarchy-params="[[hierarchyParams]]"
+              render-hierarchy="{{renderHierarchy}}"
+              devices-for-stats="[[devicesForStats]]"
+              stats="[[stats]]"
               selected-node="{{_selectedNode}}"
               highlighted-node="{{_highlightedNode}}"
               color-by="[[colorBy]]"
               color-by-params="{{colorByParams}}"
-              graph-name="[[graphName]]"
-              progress="[[progress]]"
+              progress="{{progress}}"
     ></tf-graph>
   </div>
   <div id="info">
     <tf-graph-info id="graph-info"
-                    title="selected"
-                    graph-hierarchy="[[graphHierarchy]]"
-                    render-hierarchy="[[_renderHierarchy]]"
-                    graph="[[graph]]"
-                    selected-node="{{_selectedNode}}"
-                    selected-node-include="{{_selectedNodeInclude}}"
-                    highlighted-node="{{_highlightedNode}}"
-                    color-by="[[colorBy]]"
-                    color-by-params="[[colorByParams]]"
+              title="selected"
+              graph-hierarchy="[[graphHierarchy]]"
+              render-hierarchy="[[renderHierarchy]]"
+              graph="[[graph]]"
+              selected-node="{{_selectedNode}}"
+              selected-node-include="{{_selectedNodeInclude}}"
+              highlighted-node="{{_highlightedNode}}"
+              color-by="[[colorBy]]"
+              color-by-params="[[colorByParams]]"
     ></tf-graph-info>
   </div>
   <div class="context-menu"></div>
@@ -148,9 +151,7 @@ Polymer({
     // Public API.
     graphHierarchy: Object,
     graph: Object,
-    graphName: String,
-    // True if the graph data has also run-time stats.
-    hasStats: Boolean,
+    stats: Object,
     /**
      * @type {value: number, msg: string}
      *
@@ -161,14 +162,17 @@ Polymer({
     colorBy: String,
     colorByParams: {
       type: Object,
-      notify: true,
+      notify: true
+    },
+    renderHierarchy: {
+      type: Object,
+      notify: true
     },
     // Private API: Data routing between child components.
     _selectedNode: String,
     // The enum value of the include property of the selected node.
     _selectedNodeInclude: Number,
-    _highlightedNode: String,
-    _renderHierarchy: Object,
+    _highlightedNode: String
   },
   listeners: {
     'node-toggle-extract': '_nodeToggleExtract'

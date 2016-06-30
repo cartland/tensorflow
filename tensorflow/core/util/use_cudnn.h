@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-// The utility to check whether we have Cudnn depenedency.
+// The utility to check whether we have Cudnn dependency.
 
 #ifndef TENSORFLOW_UTIL_USE_CUDNN_H_
 #define TENSORFLOW_UTIL_USE_CUDNN_H_
@@ -21,6 +21,7 @@ limitations under the License.
 namespace tensorflow {
 
 bool CanUseCudnn();
+bool CudnnUseAutotune();
 
 }  // namespace tensorflow
 

@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -21,11 +21,11 @@ limitations under the License.
 #include <string>
 #include <vector>
 
+#include "tensorflow/core/framework/tensor.h"
+#include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/graph/graph.h"
 #include "tensorflow/core/graph/types.h"
-#include "tensorflow/core/platform/port.h"
-#include "tensorflow/core/public/tensor.h"
-#include "tensorflow/core/public/tensor_shape.h"
+#include "tensorflow/core/platform/types.h"
 
 namespace tensorflow {
 namespace test {
@@ -40,6 +40,14 @@ void ToGraphDef(Graph* g, GraphDef* def);
 // Adds a node in "g" producing a constant "tensor".
 Node* Constant(Graph* g, const Tensor& tensor);
 Node* Constant(Graph* g, const Tensor& tensor, const string& name);
+
+// Adds a node in "g" producing a constant "tensor" on the host.
+// The given node which, unlike the regular Constant above, always
+// stores its output on the host.  This is necessary for use
+// in GPU tests where the test Op in question runs on the device
+// but requires some arguments to be pinned to the host.
+Node* HostConstant(Graph* g, const Tensor& tensor);
+Node* HostConstant(Graph* g, const Tensor& tensor, const string& name);
 
 // Adds a variable in "g" of the given "shape" and "dtype".
 Node* Var(Graph* g, const DataType dtype, const TensorShape& shape);
@@ -93,9 +101,13 @@ Node* RandomUniform(Graph* g, Node* input, DataType dtype);
 // Generates random unit normal distribution of the input shape.
 Node* RandomGaussian(Graph* g, Node* input, DataType dtype);
 
+// Generates random gamma distribution with the given shape and alpha[s].
+// Output dtype determined by alpha.
+Node* RandomGamma(Graph* g, Node* shape, Node* alpha);
+
 // Generates random parameters from the truncated standard normal distribution
 // of the nput shape
-Node* RandomParameters(Graph* g, Node* input, DataType dtype);
+Node* TruncatedNormal(Graph* g, Node* input, DataType dtype);
 
 // Adds an error node in "g". The node's computation always
 // generates an error with the given error message "errmsg".
@@ -146,6 +158,29 @@ Node* Select(Graph* g, Node* c, Node* inx, Node* iny);
 
 // Casts "in" into data type "dst".
 Node* Cast(Graph* g, Node* in, DataType dst);
+
+// Perform gather op on params "in0" with indicies "in1".
+Node* Gather(Graph* g, Node* in0, Node* in1);
+
+// Computes the args needed broadcast gradient function.
+Node* BroadcastGradientArgs(Graph* g, Node* s0, Node* s1);
+
+// Gets a tensor stored in the session state.
+Node* GetSessionTensor(Graph* g, Node* in);
+
+// Adds a Concat node in "g". The first input is "concat_dim", the
+// dimension to concatenate on, and the tensors to concatenate are
+// given in "tensors".
+Node* Concat(Graph* g, Node* concat_dim, gtl::ArraySlice<Node*> tensors);
+
+// Add a Relu node in "g".
+Node* Relu(Graph* g, Node* in);
+
+// Add a Relu6 node in "g".
+Node* Relu6(Graph* g, Node* in);
+
+// Add a BiasAdd node in "g".
+Node* BiasAdd(Graph* g, Node* value, Node* bias);
 
 }  // end namespace graph
 }  // end namespace test

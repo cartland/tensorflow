@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -15,8 +15,9 @@ limitations under the License.
 
 #include "tensorflow/core/common_runtime/device_set.h"
 
-#include <gtest/gtest.h>
-#include "tensorflow/core/public/status.h"
+#include <vector>
+#include "tensorflow/core/lib/core/status.h"
+#include "tensorflow/core/platform/test.h"
 
 namespace tensorflow {
 namespace {
@@ -36,7 +37,7 @@ static Device* Dev(const char* type, const char* name) {
   return new FakeDevice(attr);
 }
 
-class DeviceSetTest : public testing::Test {
+class DeviceSetTest : public ::testing::Test {
  public:
   void AddDevice(const char* type, const char* name) {
     Device* d = Dev(type, name);

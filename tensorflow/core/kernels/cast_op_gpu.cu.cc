@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -38,18 +38,22 @@ struct CastFunctor<GPUDevice, O, I> {
   DEFINE(in_type, bool);         \
   DEFINE(in_type, uint8);        \
   DEFINE(in_type, int8);         \
+  DEFINE(in_type, uint16);       \
   DEFINE(in_type, int16);        \
   DEFINE(in_type, int32);        \
   DEFINE(in_type, int64);        \
+  DEFINE(in_type, Eigen::half);  \
   DEFINE(in_type, float);        \
   DEFINE(in_type, double)
 
 DEFINE_ALL_FROM(bool);
 DEFINE_ALL_FROM(uint8);
 DEFINE_ALL_FROM(int8);
+DEFINE_ALL_FROM(uint16);
 DEFINE_ALL_FROM(int16);
 DEFINE_ALL_FROM(int32);
 DEFINE_ALL_FROM(int64);
+DEFINE_ALL_FROM(Eigen::half);
 DEFINE_ALL_FROM(float);
 DEFINE_ALL_FROM(double);
 DEFINE(bfloat16, float);

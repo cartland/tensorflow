@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -15,13 +15,15 @@ limitations under the License.
 
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/op_kernel.h"
-#include "tensorflow/core/public/status.h"
+#include "tensorflow/core/lib/core/status.h"
 
 namespace tensorflow {
 
 REGISTER_OP("KernelLabel").Output("result: string");
 
-REGISTER_OP("GraphDefVersion").Output("version: int32");
+REGISTER_OP("GraphDefVersion").Output("version: int32").SetIsStateful();
+
+REGISTER_OP("Old").Deprecated(8, "For reasons");
 
 namespace {
 enum KernelLabel { DEFAULT_LABEL, OVERLOAD_1_LABEL, OVERLOAD_2_LABEL };
@@ -67,7 +69,7 @@ class GraphDefVersionOp : public OpKernel {
     : OpKernel(ctx), graph_def_version_(ctx->graph_def_version()) {}
 
   void Compute(OpKernelContext* ctx) override {
-    Tensor* output;
+    Tensor* output = nullptr;
     OP_REQUIRES_OK(ctx, ctx->allocate_output(0, TensorShape({}), &output));
     output->scalar<int>()() = graph_def_version_;
   }
@@ -78,5 +80,14 @@ class GraphDefVersionOp : public OpKernel {
 
 REGISTER_KERNEL_BUILDER(Name("GraphDefVersion").Device(DEVICE_CPU),
                         GraphDefVersionOp);
+
+class OldOp : public OpKernel {
+ public:
+  OldOp(OpKernelConstruction* ctx) : OpKernel(ctx) {}
+
+  void Compute(OpKernelContext* ctx) override {}
+};
+
+REGISTER_KERNEL_BUILDER(Name("Old").Device(DEVICE_CPU), OldOp);
 
 }  // end namespace tensorflow

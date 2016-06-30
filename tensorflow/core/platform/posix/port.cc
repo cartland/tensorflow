@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "tensorflow/core/platform/port.h"
+#include "tensorflow/core/platform/types.h"
 #if defined(__linux) && !defined(__ANDROID__)
 #include <sched.h>
 #endif
@@ -77,6 +77,8 @@ void* aligned_malloc(size_t size, int minimum_alignment) {
 
 void aligned_free(void* aligned_memory) { free(aligned_memory); }
 
+std::size_t MallocExtension_GetAllocatedSize(const void* p) { return 0; }
+
 void AdjustFilenameForLogging(string* filename) {
   // Nothing to do
 }
@@ -109,6 +111,8 @@ bool Snappy_Uncompress(const char* input, size_t length, char* output) {
   return false;
 #endif
 }
+
+string Demangle(const char* mangled) { return mangled; }
 
 }  // namespace port
 }  // namespace tensorflow

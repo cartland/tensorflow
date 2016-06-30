@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ package org.tensorflow.demo;
 
 import android.content.res.AssetManager;
 import android.graphics.Bitmap;
+import android.os.Trace;
 import android.util.Log;
 
 import java.util.ArrayList;
@@ -36,7 +37,10 @@ public class TensorflowClassifier implements Classifier {
       String labels,
       int numClasses,
       int inputSize,
-      int imageMean);
+      int imageMean,
+      float imageStd,
+      String inputName,
+      String outputName);
 
   private native String classifyImageBmp(Bitmap bitmap);
 
@@ -48,6 +52,8 @@ public class TensorflowClassifier implements Classifier {
 
   @Override
   public List<Recognition> recognizeImage(final Bitmap bitmap) {
+    // Log this method so that it can be analyzed with systrace.
+    Trace.beginSection("Recognize");
     final ArrayList<Recognition> recognitions = new ArrayList<Recognition>();
     for (final String result : classifyImageBmp(bitmap).split("\n")) {
       Log.i(TAG, "Parsing [" + result + "]");
@@ -69,6 +75,7 @@ public class TensorflowClassifier implements Classifier {
         recognitions.add(new Recognition(id, title, confidence, null));
       }
     }
+    Trace.endSection();
     return recognitions;
   }
 

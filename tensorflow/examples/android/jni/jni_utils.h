@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ limitations under the License.
 #include <string>
 #include <vector>
 
-#include "tensorflow/core/platform/port.h"
+#include "tensorflow/core/platform/types.h"
 
 namespace google {
 namespace protobuf {
@@ -41,5 +41,8 @@ void ReadFileToString(AAssetManager* const asset_manager,
 
 void ReadFileToVector(AAssetManager* const asset_manager,
     const char* const filename, std::vector<std::string>* str_vector);
+
+void WriteProtoToFile(const char* const filename,
+                      const google::protobuf::MessageLite& message);
 
 #endif  // ORG_TENSORFLOW_JNI_JNI_UTILS_H_

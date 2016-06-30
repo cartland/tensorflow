@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -27,11 +27,13 @@ limitations under the License.
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/register_types.h"
+#include "tensorflow/core/framework/tensor.h"
+#include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/tensor_types.h"
 #include "tensorflow/core/framework/types.h"
+#include "tensorflow/core/kernels/bounds_check.h"
 #include "tensorflow/core/platform/logging.h"
-#include "tensorflow/core/public/tensor.h"
-#include "tensorflow/core/public/tensor_shape.h"
+#include "tensorflow/core/platform/macros.h"
 
 namespace tensorflow {
 
@@ -52,13 +54,17 @@ class ArgOp : public OpKernel {
                     "dim must be a scalar, but received tensor of shape: ",
                     dimension.shape().DebugString()));
 
-    const int32 dim = dimension.scalar<int32>()();
+    const int32 dim = internal::SubtleMustCopy(dimension.scalar<int32>()());
     const int input_dims = input.dims();
 
     OP_REQUIRES(context, dim >= 0, errors::InvalidArgument("dim must be >= 0"));
     OP_REQUIRES(context, dim < input_dims,
                 errors::InvalidArgument("Minimum tensor rank: ", dim,
                                         " but got: ", input_dims));
+    OP_REQUIRES(
+        context, input.dim_size(dim) > 0,
+        errors::InvalidArgument("Reduction axis ", dim, " is empty in shape ",
+                                input.shape().DebugString()));
 
     TensorShape output_shape;
     TensorShape input_shape = input.shape();

@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ limitations under the License.
 #include <string>
 
 #include "tensorflow/core/lib/core/stringpiece.h"
+#include "tensorflow/core/lib/hash/hash.h"
 #include "tensorflow/core/lib/strings/strcat.h"
 
 namespace tensorflow {
@@ -33,6 +34,13 @@ struct TensorId : public std::pair<StringPiece, int> {
   using Base::pair;
 
   string ToString() const { return strings::StrCat(first, ":", second); }
+
+  struct Hasher {
+   public:
+    std::size_t operator()(const TensorId& x) const {
+      return Hash32(x.first.data(), x.first.size(), x.second);
+    }
+  };
 };
 
 TensorId ParseTensorName(const string& name);

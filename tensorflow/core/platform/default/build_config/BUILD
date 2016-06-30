@@ -7,8 +7,9 @@ licenses(["notice"])  # Apache 2.0
 
 exports_files(["LICENSE"])
 
-load("/tensorflow/tensorflow", "tf_copts")
-load("/tensorflow/tensorflow", "tf_cuda_library")
+load("//tensorflow:tensorflow.bzl", "tf_copts")
+load("//tensorflow:tensorflow.bzl", "tf_cuda_library")
+load("//third_party/gpus/cuda:platform.bzl", "cuda_library_path")
 
 cc_library(
     name = "gtest",
@@ -30,15 +31,26 @@ tf_cuda_library(
     name = "stream_executor",
     deps = [
         "//tensorflow/stream_executor",
-    ],
+    ] + select({
+        "//third_party/gpus/cuda:darwin": ["IOKit"],
+        "//conditions:default": [],
+    }),
+)
+
+# OSX framework for device driver access
+cc_library(
+    name = "IOKit",
+    linkopts = ["-framework IOKit"],
 )
 
 cc_library(
     name = "platformlib",
     copts = tf_copts(),
     deps = [
+        "@farmhash_archive//:farmhash",
         "@jpeg_archive//:jpeg",
         "@png_archive//:png",
+        "@highwayhash//:sip_hash",
         "@re2//:re2",
         "//tensorflow/core:protos_cc",
     ],
@@ -59,12 +71,6 @@ cc_library(
     deps = [],
 )
 
-cc_library(
-    name = "cuda_runtime_extra",
-    linkstatic = 1,
-    deps = [],
-)
-
 filegroup(
     name = "android_proto_lib_portable_proto",
     srcs = [],
@@ -74,12 +80,37 @@ filegroup(
 cc_library(
     name = "cuda",
     data = [
-        "//third_party/gpus/cuda:lib64/libcudart.so.7.0",
+        "//third_party/gpus/cuda:{}".format(cuda_library_path("cudart")),
     ],
-    linkopts = [
-        "-Wl,-rpath,third_party/gpus/cuda/lib64",
-    ],
+    linkopts = select({
+        "//third_party/gpus/cuda:darwin": [
+            "-Wl,-rpath,third_party/gpus/cuda/lib",
+            "-Wl,-rpath,third_party/gpus/cuda/extras/CUPTI/lib",
+        ],
+        "//conditions:default": [
+            "-Wl,-rpath,third_party/gpus/cuda/lib64",
+            "-Wl,-rpath,third_party/gpus/cuda/extras/CUPTI/lib64",
+        ],
+    }),
     deps = [
         "//third_party/gpus/cuda:cudart",
     ],
+)
+
+filegroup(
+    name = "android_srcs",
+    srcs = glob(["*.h"]),
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "all_files",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            "**/METADATA",
+            "**/OWNERS",
+        ],
+    ),
+    visibility = ["//tensorflow:__subpackages__"],
 )

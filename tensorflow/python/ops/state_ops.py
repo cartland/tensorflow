@@ -1,4 +1,4 @@
-# Copyright 2015 Google Inc. All Rights Reserved.
+# Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,9 +24,14 @@ collected in the graph.
 
 @@all_variables
 @@trainable_variables
+@@local_variables
+@@moving_average_variables
 
 @@initialize_all_variables
 @@initialize_variables
+@@initialize_local_variables
+@@is_variable_initialized
+@@report_uninitialized_variables
 @@assert_variables_initialized
 
 ## Saving and Restoring Variables
@@ -44,10 +49,13 @@ TensorFlow provides several classes and operations that you can use to
 create variables contingent on certain conditions.
 
 @@get_variable
+@@VariableScope
+@@variable_scope
+@@variable_op_scope
 @@get_variable_scope
 @@make_template
-@@variable_op_scope
-@@variable_scope
+
+@@no_regularizer
 
 @@constant_initializer
 @@random_normal_initializer
@@ -55,6 +63,12 @@ create variables contingent on certain conditions.
 @@random_uniform_initializer
 @@uniform_unit_scaling_initializer
 @@zeros_initializer
+@@ones_initializer
+
+## Variable Partitioners for Sharding
+
+@@variable_axis_size_partitioner
+@@min_max_variable_partitioner
 
 ## Sparse Variable Updates
 
@@ -75,19 +89,28 @@ automatically by the optimizers in most cases.
 @@scatter_sub
 @@sparse_mask
 @@IndexedSlices
+
+
+## Exporting and Importing Meta Graphs
+
+@@export_meta_graph
+@@import_meta_graph
+
 """
 
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+from tensorflow.python.framework import common_shapes
 from tensorflow.python.framework import ops
 from tensorflow.python.framework import tensor_shape
 from tensorflow.python.framework import tensor_util
-from tensorflow.python.ops import common_shapes
 from tensorflow.python.ops import gen_state_ops
-# pylint: disable=wildcard-import,undefined-variable
+# go/tf-wildcard-import
+# pylint: disable=wildcard-import
 from tensorflow.python.ops.gen_state_ops import *
+# pylint: enable=wildcard-import
 
 
 # pylint: disable=protected-access
@@ -125,6 +148,8 @@ def variable_op(shape, dtype, name="Variable", set_shape=True, container="",
 # NOTE(mrry): Shapes are conditionally set in the Python wrapper.
 ops.RegisterShape("Variable")(common_shapes.unknown_shape)
 
+ops.RegisterShape("IsVariableInitialized")(common_shapes.scalar_shape)
+
 
 @ops.RegisterShape("TemporaryVariable")
 def _TemporaryVariableShape(op):
@@ -160,7 +185,7 @@ def init_variable(v, init, name="init"):
   """
   with ops.op_scope([v, init], None, v.op.name + "/"):
     with ops.name_scope(name) as scope:
-      with ops.device(v.device or ops.get_default_graph().get_default_device()):
+      with ops.colocate_with(v):
         if callable(init):
           assert v.get_shape().is_fully_defined(), "Variable shape unknown."
           # TODO(mrry): Convert to v.shape when the property and
@@ -168,10 +193,10 @@ def init_variable(v, init, name="init"):
           # tf.TensorShape objects).
           value = init(v.get_shape().as_list(), v.dtype.base_dtype)
           value = ops.convert_to_tensor(value, name="value")
-          return assign(v, value, name=scope)
+          return gen_state_ops.assign(v, value, name=scope)
         else:
           init = ops.convert_to_tensor(init, name="init")
-          return assign(v, init, name=scope)
+          return gen_state_ops.assign(v, init, name=scope)
 
 
 @ops.RegisterShape("Assign")

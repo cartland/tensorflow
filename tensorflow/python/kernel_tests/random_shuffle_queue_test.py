@@ -1,4 +1,4 @@
-# Copyright 2015 Google Inc. All Rights Reserved.
+# Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,8 +21,6 @@ from __future__ import print_function
 import random
 import re
 import time
-
-import tensorflow.python.platform
 
 import numpy as np
 from six.moves import xrange  # pylint: disable=redefined-builtin
@@ -1068,6 +1066,14 @@ class RandomShuffleQueueTest(tf.test.TestCase):
       # Enough enqueued to unblock the dequeue
       thread.join()
       self.assertItemsEqual(elem, results)
+
+  def testDequeueUpToFails(self):
+    with self.test_session():
+      q = tf.RandomShuffleQueue(10, 0, tf.float32, shapes=())
+      dequeued_t = q.dequeue_up_to(0)
+      with self.assertRaisesOpError(
+          r"Dequeue: Queue does not support small batches"):
+        dequeued_t.eval()
 
 
 if __name__ == "__main__":

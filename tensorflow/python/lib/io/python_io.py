@@ -1,4 +1,4 @@
-# Copyright 2015 Google Inc. All Rights Reserved.
+# Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -45,4 +45,11 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+# go/tf-wildcard-import
+# pylint: disable=wildcard-import
 from tensorflow.python.lib.io.tf_record import *
+# pylint: enable=wildcard-import
+from tensorflow.python.util.all_util import make_all
+
+
+__all__ = make_all(__name__)

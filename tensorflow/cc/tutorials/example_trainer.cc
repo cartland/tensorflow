@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,15 +20,18 @@ limitations under the License.
 
 #include "tensorflow/cc/ops/standard_ops.h"
 #include "tensorflow/core/framework/graph.pb.h"
+#include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/graph/default_device.h"
 #include "tensorflow/core/graph/graph_def_builder.h"
-#include "tensorflow/core/lib/core/command_line_flags.h"
 #include "tensorflow/core/lib/core/threadpool.h"
 #include "tensorflow/core/lib/strings/stringprintf.h"
 #include "tensorflow/core/platform/init_main.h"
 #include "tensorflow/core/platform/logging.h"
+#include "tensorflow/core/platform/types.h"
 #include "tensorflow/core/public/session.h"
-#include "tensorflow/core/public/tensor.h"
+
+using tensorflow::string;
+using tensorflow::int32;
 
 namespace tensorflow {
 namespace example {
@@ -39,11 +42,6 @@ struct Options {
   int num_iterations = 100;          // Each step repeats this many times
   bool use_gpu = false;              // Whether to use gpu in the training
 };
-
-TF_DEFINE_int32(num_concurrent_sessions, 10, "Number of concurrent sessions");
-TF_DEFINE_int32(num_concurrent_steps, 10, "Number of concurrent steps");
-TF_DEFINE_int32(num_iterations, 100, "Number of iterations");
-TF_DEFINE_bool(use_gpu, false, "Whether to use gpu in the training");
 
 // A = [3 2; -1 0]; x = rand(2, 1);
 // We want to compute the largest eigenvalue for A.
@@ -84,9 +82,12 @@ string DebugString(const Tensor& x, const Tensor& y) {
   CHECK_EQ(y.NumElements(), 2);
   auto x_flat = x.flat<float>();
   auto y_flat = y.flat<float>();
-  const float lambda = y_flat(0) / x_flat(0);
+  // Compute an estimate of the eigenvalue via
+  //      (x' A x) / (x' x) = (x' y) / (x' x)
+  // and exploit the fact that x' x = 1 by assumption
+  Eigen::Tensor<float, 0, Eigen::RowMajor> lambda = (x_flat * y_flat).sum();
   return strings::Printf("lambda = %8.6f x = [%8.6f %8.6f] y = [%8.6f %8.6f]",
-                         lambda, x_flat(0), x_flat(1), y_flat(0), y_flat(1));
+                         lambda(), x_flat(0), x_flat(1), y_flat(0), y_flat(1));
 }
 
 void ConcurrentSteps(const Options* opts, int session_index) {
@@ -108,7 +109,11 @@ void ConcurrentSteps(const Options* opts, int session_index) {
     step_threads.Schedule([&session, opts, session_index, step]() {
       // Randomly initialize the input.
       Tensor x(DT_FLOAT, TensorShape({2, 1}));
-      x.flat<float>().setRandom();
+      auto x_flat = x.flat<float>();
+      x_flat.setRandom();
+      Eigen::Tensor<float, 0, Eigen::RowMajor> inv_norm =
+          x_flat.square().sum().sqrt().inverse();
+      x_flat = x_flat * inv_norm();
 
       // Iterations.
       std::vector<Tensor> outputs;
@@ -116,7 +121,7 @@ void ConcurrentSteps(const Options* opts, int session_index) {
         outputs.clear();
         TF_CHECK_OK(
             session->Run({{"x", x}}, {"y:0", "y_normalized:0"}, {}, &outputs));
-        CHECK_EQ(2, outputs.size());
+        CHECK_EQ(size_t{2}, outputs.size());
 
         const Tensor& y = outputs[0];
         const Tensor& y_norm = outputs[1];
@@ -144,18 +149,72 @@ void ConcurrentSessions(const Options& opts) {
 }  // end namespace example
 }  // end namespace tensorflow
 
+namespace {
+
+bool ParseInt32Flag(tensorflow::StringPiece arg, tensorflow::StringPiece flag,
+                    int32* dst) {
+  if (arg.Consume(flag) && arg.Consume("=")) {
+    char extra;
+    return (sscanf(arg.data(), "%d%c", dst, &extra) == 1);
+  }
+
+  return false;
+}
+
+bool ParseBoolFlag(tensorflow::StringPiece arg, tensorflow::StringPiece flag,
+                   bool* dst) {
+  if (arg.Consume(flag)) {
+    if (arg.empty()) {
+      *dst = true;
+      return true;
+    }
+
+    if (arg == "=true") {
+      *dst = true;
+      return true;
+    } else if (arg == "=false") {
+      *dst = false;
+      return true;
+    }
+  }
+
+  return false;
+}
+
+}  // namespace
+
 int main(int argc, char* argv[]) {
   tensorflow::example::Options opts;
-  tensorflow::Status s = tensorflow::ParseCommandLineFlags(&argc, argv);
-  if (!s.ok()) {
-    LOG(FATAL) << "Error parsing command line flags: " << s.ToString();
-  }
-  tensorflow::port::InitMain(argv[0], &argc, &argv);
+  std::vector<char*> unknown_flags;
+  for (int i = 1; i < argc; ++i) {
+    if (string(argv[i]) == "--") {
+      while (i < argc) {
+        unknown_flags.push_back(argv[i]);
+        ++i;
+      }
+      break;
+    }
 
-  opts.num_concurrent_sessions =
-      tensorflow::example::FLAGS_num_concurrent_sessions;
-  opts.num_concurrent_steps = tensorflow::example::FLAGS_num_concurrent_steps;
-  opts.num_iterations = tensorflow::example::FLAGS_num_iterations;
-  opts.use_gpu = tensorflow::example::FLAGS_use_gpu;
+    if (ParseInt32Flag(argv[i], "--num_concurrent_sessions",
+                       &opts.num_concurrent_sessions) ||
+        ParseInt32Flag(argv[i], "--num_concurrent_steps",
+                       &opts.num_concurrent_steps) ||
+        ParseInt32Flag(argv[i], "--num_iterations", &opts.num_iterations) ||
+        ParseBoolFlag(argv[i], "--use_gpu", &opts.use_gpu)) {
+      continue;
+    }
+
+    fprintf(stderr, "Unknown flag: %s\n", argv[i]);
+    return -1;
+  }
+
+  // Passthrough any unknown flags.
+  int dst = 1;  // Skip argv[0]
+  for (char* f : unknown_flags) {
+    argv[dst++] = f;
+  }
+  argv[dst++] = nullptr;
+  argc = unknown_flags.size() + 1;
+  tensorflow::port::InitMain(argv[0], &argc, &argv);
   tensorflow::example::ConcurrentSessions(opts);
 }

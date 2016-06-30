@@ -1,4 +1,4 @@
-# Copyright 2015 Google Inc. All Rights Reserved.
+# Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,16 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ==============================================================================
-
 """Exception types for TensorFlow errors."""
+
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import contextlib
 import traceback
 import warnings
 
 from tensorflow.core.lib.core import error_codes_pb2
+from tensorflow.python import pywrap_tensorflow
+from tensorflow.python.util import compat
 
 
 class OpError(Exception):
@@ -38,7 +41,8 @@ class OpError(Exception):
     """Creates a new `OpError` indicating that a particular op failed.
 
     Args:
-      node_def: The `graph_pb2.NodeDef` proto representing the op that failed.
+      node_def: The `graph_pb2.NodeDef` proto representing the op that failed,
+        if known; otherwise None.
       op: The `ops.Operation` that failed, if known; otherwise None.
       message: The message string describing the failure.
       error_code: The `error_codes_pb2.Code` describing the error.
@@ -327,7 +331,7 @@ class AbortedError(OpError):
 
 
 class OutOfRangeError(OpError):
-  """Raised when an operation executed past the valid range.
+  """Raised when an operation iterates past the valid input range.
 
   This exception is raised in "end-of-file" conditions, such as when a
   [`queue.dequeue()`](../../api_docs/python/io_ops.md#QueueBase.dequeue)
@@ -432,3 +436,38 @@ def _make_specific_exception(node_def, op, message, error_code):
   except KeyError:
     warnings.warn("Unknown error code: %d" % error_code)
     return UnknownError(node_def, op, message, error_code)
+
+
+@contextlib.contextmanager
+def raise_exception_on_not_ok_status():
+  try:
+    status = pywrap_tensorflow.TF_NewStatus()
+    yield status
+    if pywrap_tensorflow.TF_GetCode(status) != 0:
+      raise _make_specific_exception(
+          None, None,
+          compat.as_text(pywrap_tensorflow.TF_Message(status)),
+          pywrap_tensorflow.TF_GetCode(status))
+  finally:
+    pywrap_tensorflow.TF_DeleteStatus(status)
+
+
+# These are documented in client/client_lib.py.
+__all__ = [
+    "AbortedError",
+    "AlreadyExistsError",
+    "CancelledError",
+    "DataLossError",
+    "DeadlineExceededError",
+    "FailedPreconditionError",
+    "InternalError",
+    "InvalidArgumentError",
+    "NotFoundError",
+    "OutOfRangeError",
+    "PermissionDeniedError",
+    "ResourceExhaustedError",
+    "UnauthenticatedError",
+    "UnavailableError",
+    "UnimplementedError",
+    "UnknownError",
+]

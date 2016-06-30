@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ limitations under the License.
 %import(module="tensorflow.python.pywrap_tensorflow") "tensorflow/python/lib/core/status.i"
 
 %inline %{
-#include "tensorflow/core/public/status.h"
+#include "tensorflow/core/lib/core/status.h"
 
 tensorflow::Status NotOkay() {
   return tensorflow::Status(tensorflow::error::INVALID_ARGUMENT, "Testing 1 2 3");

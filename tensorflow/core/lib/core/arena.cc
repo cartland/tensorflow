@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -29,10 +29,11 @@ limitations under the License.
 #include <vector>
 
 #include "tensorflow/core/platform/logging.h"
+#include "tensorflow/core/platform/macros.h"
+#include "tensorflow/core/platform/mem.h"
+
 namespace tensorflow {
 namespace core {
-
-static const int kPageSize = getpagesize();
 
 // ----------------------------------------------------------------------
 // Arena::Arena()
@@ -74,7 +75,7 @@ bool Arena::SatisfyAlignment(size_t alignment) {
     freestart_ += waste;
     remaining_ -= waste;
   }
-  DCHECK_EQ(0, reinterpret_cast<size_t>(freestart_) & (alignment - 1));
+  DCHECK_EQ(size_t{0}, reinterpret_cast<size_t>(freestart_) & (alignment - 1));
   return true;
 }
 
@@ -165,7 +166,7 @@ Arena::AllocatedBlock* Arena::AllocNewBlock(const size_t block_size,
   const uint32 adjusted_alignment =
       (alignment > 1 ? LeastCommonMultiple(alignment, kDefaultAlignment) : 1);
 
-  CHECK_LE(adjusted_alignment, 1 << 20)
+  CHECK_LE(adjusted_alignment, static_cast<uint32>(1 << 20))
       << "Alignment on boundaries greater than 1MB not supported.";
 
   // If block_size > alignment we force block_size to be a multiple

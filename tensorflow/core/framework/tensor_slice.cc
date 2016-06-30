@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@ limitations under the License.
 ==============================================================================*/
 
 #include "tensorflow/core/framework/tensor_slice.h"
+#include <vector>
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/strings/str_util.h"
 #include "tensorflow/core/lib/strings/strcat.h"
@@ -190,6 +191,22 @@ void TensorSlice::ComputeRelative(const TensorSlice& sub,
       // sub and the start of base
       relative->set_start(d, sub.start(d) - start(d));
       relative->set_length(d, sub.length(d));
+    }
+  }
+}
+
+void TensorSlice::UpdateToCover(const TensorSlice& other) {
+  DCHECK_EQ(dims(), other.dims());
+  for (int d = 0; d < dims(); ++d) {
+    if (!IsFullAt(d)) {
+      if (other.IsFullAt(d)) {
+        starts_[d] = 0;
+        lengths_[d] = kFullExtent;
+      } else {
+        const auto new_end = std::max(end(d), other.end(d));
+        set_start(d, std::min(start(d), other.start(d)));
+        set_length(d, new_end - start(d));
+      }
     }
   }
 }

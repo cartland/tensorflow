@@ -1,4 +1,4 @@
-# Copyright 2015 Google Inc. All Rights Reserved.
+# Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,8 +17,6 @@
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
-
-import tensorflow.python.platform
 
 import numpy as np
 import tensorflow as tf
@@ -67,7 +65,7 @@ class AssignOpTest(tf.test.TestCase):
       var_value, op_value = self._initAssignSubFetch(x, y, use_gpu=False)
       self.assertAllEqual(x - y, var_value)
       self.assertAllEqual(x - y, op_value)
-      if tf.test.IsBuiltWithCuda() and dtype in [np.float32, np.float64]:
+      if tf.test.is_built_with_cuda() and dtype in [np.float32, np.float64]:
         var_value, op_value = self._initAssignFetch(x, y, use_gpu=True)
         self.assertAllEqual(y, var_value)
         self.assertAllEqual(y, op_value)

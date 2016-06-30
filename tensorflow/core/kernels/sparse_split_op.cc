@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@ limitations under the License.
 
 #define EIGEN_USE_THREADS
 
+#include <vector>
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/register_types.h"
 #include "tensorflow/core/util/sparse/sparse_tensor.h"
@@ -36,16 +37,16 @@ class SparseSplitOp : public OpKernel {
 
     OP_REQUIRES(context, TensorShapeUtils::IsMatrix(input_indices.shape()),
                 errors::InvalidArgument(
-                    "Input indices should be a matrix but recived shape ",
-                    input_indices.shape().ShortDebugString()));
+                    "Input indices should be a matrix but received shape ",
+                    input_indices.shape().DebugString()));
     OP_REQUIRES(context, TensorShapeUtils::IsVector(input_values.shape()),
                 errors::InvalidArgument(
                     "Input values should be a vector but received shape ",
-                    input_indices.shape().ShortDebugString()));
+                    input_indices.shape().DebugString()));
     OP_REQUIRES(context, TensorShapeUtils::IsVector(input_shape.shape()),
                 errors::InvalidArgument(
                     "Input shape should be a vector but received shape ",
-                    input_shape.shape().ShortDebugString()));
+                    input_shape.shape().DebugString()));
 
     OP_REQUIRES(context, input_shape.dim_size(0) &&
                              split_dim < input_shape.vec<int64>().size(),

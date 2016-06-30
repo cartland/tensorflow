@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -125,7 +125,6 @@ static const char kNullCharacter = '\xff';  // Combined with kEscape1
 static const char kSeparator = '\001';      // Combined with kEscape1
 
 static const char kEscape2 = '\xff';
-static const char kInfinity = '\xff';     // Combined with kEscape2
 static const char kFFCharacter = '\000';  // Combined with kEscape2
 
 static const char kEscape1_Separator[2] = {kEscape1, kSeparator};

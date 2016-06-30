@@ -1,4 +1,4 @@
-# Copyright 2015 Google Inc. All Rights Reserved.
+# Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -30,7 +30,6 @@ from __future__ import print_function
 import os.path
 import time
 
-import tensorflow.python.platform
 import numpy
 import tensorflow as tf
 
@@ -58,9 +57,11 @@ def read_and_decode(filename_queue):
   _, serialized_example = reader.read(filename_queue)
   features = tf.parse_single_example(
       serialized_example,
-      dense_keys=['image_raw', 'label'],
       # Defaults are not specified since both keys are required.
-      dense_types=[tf.string, tf.int64])
+      features={
+          'image_raw': tf.FixedLenFeature([], tf.string),
+          'label': tf.FixedLenFeature([], tf.int64),
+      })
 
   # Convert from a scalar string tensor (whose single string has
   # length mnist.IMAGE_PIXELS) to a uint8 tensor with shape
@@ -145,7 +146,8 @@ def run_training():
     train_op = mnist.training(loss, FLAGS.learning_rate)
 
     # The op for initializing the variables.
-    init_op = tf.initialize_all_variables()
+    init_op = tf.group(tf.initialize_all_variables(),
+                       tf.initialize_local_variables())
 
     # Create a session for running operations in the Graph.
     sess = tf.Session()

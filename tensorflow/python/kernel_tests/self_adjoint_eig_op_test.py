@@ -1,4 +1,4 @@
-# Copyright 2015 Google Inc. All Rights Reserved.
+# Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,9 +18,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-# pylint: disable=g-bad-import-order,wildcard-import,unused-import
 
-import tensorflow.python.platform
 import numpy as np
 from six.moves import xrange  # pylint: disable=redefined-builtin
 import tensorflow as tf
@@ -73,14 +71,28 @@ class SelfAdjointEigOpTest(tf.test.TestCase):
     for i in xrange(dlist[0]):
       self._testEigs(x[i], d, tf_out[i])
 
+  def _compareBatchSelfAdjointEigRank2(self, x, use_gpu=False):
+    with self.test_session() as sess:
+      tf_eig = tf.batch_self_adjoint_eig(tf.constant(x))
+      tf_out = sess.run([tf_eig])[0]
+    dlist = x.shape
+    d = dlist[-2]
+
+    self.assertEqual(len(tf_eig.get_shape()), 2)
+    self.assertEqual([d+1, d], tf_eig.get_shape().dims[-2:])
+    self._testEigs(x, d, tf_out)
+
   def testBasic(self):
     self._compareSelfAdjointEig(
         np.array([[3., 0., 1.], [0., 2., -2.], [1., -2., 3.]]))
 
   def testBatch(self):
     simple_array = np.array([[[1., 0.], [0., 5.]]])  # shape (1, 2, 2)
+    simple_array_2d = simple_array[0]  # shape (2, 2)
     self._compareBatchSelfAdjointEigRank3(simple_array)
-    self._compareBatchSelfAdjointEigRank3(np.vstack((simple_array, simple_array)))
+    self._compareBatchSelfAdjointEigRank3(
+        np.vstack((simple_array, simple_array)))
+    self._compareBatchSelfAdjointEigRank2(simple_array_2d)
     odd_sized_array = np.array([[[3., 0., 1.], [0., 2., -2.], [1., -2., 3.]]])
     self._compareBatchSelfAdjointEigRank3(
         np.vstack((odd_sized_array, odd_sized_array)))

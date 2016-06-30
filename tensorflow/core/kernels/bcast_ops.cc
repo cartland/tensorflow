@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -13,10 +13,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "tensorflow/core/platform/port.h"
+#include "tensorflow/core/util/bcast.h"
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/op_kernel.h"
-#include "tensorflow/core/util/bcast.h"
+#include "tensorflow/core/platform/macros.h"
+#include "tensorflow/core/platform/types.h"
 
 namespace tensorflow {
 
@@ -41,7 +42,7 @@ class BCastGradArgsOp : public OpKernel {
       const Tensor& in = ctx->input(i);
       OP_REQUIRES(ctx, TensorShapeUtils::IsVector(in.shape()),
                   errors::InvalidArgument("In[", i, "] must be a vector.",
-                                          in.shape().ShortDebugString()));
+                                          in.shape().DebugString()));
       BCast::Vec vec;
       for (int64 i = 0; i < in.NumElements(); ++i) {
         vec.push_back(in.vec<int32>()(i));
@@ -59,10 +60,12 @@ class BCastGradArgsOp : public OpKernel {
 
  private:
   void Output(OpKernelContext* ctx, int idx, const BCast::Vec& v) {
-    const int len = v.size();
+    const int64 len = v.size();
     Tensor* o = nullptr;
     OP_REQUIRES_OK(ctx, ctx->allocate_output(idx, TensorShape({len}), &o));
-    for (int i = 0; i < len; ++i) o->flat<int32>()(i) = v[i];
+    for (int64 i = 0; i < len; ++i) {
+      o->flat<int32>()(i) = static_cast<int32>(v[i]);
+    }
   }
 
   TF_DISALLOW_COPY_AND_ASSIGN(BCastGradArgsOp);

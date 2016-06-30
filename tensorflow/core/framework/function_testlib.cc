@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -28,7 +28,9 @@ typedef FunctionDefHelper FDH;
 GraphDef GDef(gtl::ArraySlice<NodeDef> nodes,
               gtl::ArraySlice<FunctionDef> funcs) {
   GraphDef g;
-  g.set_version(TF_GRAPH_DEF_VERSION);
+  VersionDef* versions = g.mutable_versions();
+  versions->set_producer(TF_GRAPH_DEF_VERSION);
+  versions->set_min_consumer(TF_GRAPH_DEF_VERSION_MIN_CONSUMER);
   for (auto n : nodes) {
     *(g.add_node()) = n;
   }

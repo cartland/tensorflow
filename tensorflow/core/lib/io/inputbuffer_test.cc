@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -15,15 +15,15 @@ limitations under the License.
 
 #include "tensorflow/core/lib/io/inputbuffer.h"
 
-#include "tensorflow/core/public/env.h"
+#include <vector>
+#include "tensorflow/core/platform/env.h"
 
-#include <gtest/gtest.h>
 #include "tensorflow/core/lib/core/errors.h"
+#include "tensorflow/core/lib/core/status.h"
 #include "tensorflow/core/lib/core/status_test_util.h"
 #include "tensorflow/core/lib/strings/strcat.h"
 #include "tensorflow/core/platform/logging.h"
 #include "tensorflow/core/platform/test.h"
-#include "tensorflow/core/public/status.h"
 
 namespace tensorflow {
 
@@ -38,10 +38,10 @@ TEST(InputBuffer, ReadLine_Empty) {
   WriteStringToFile(env, fname, "");
 
   for (auto buf_size : BufferSizes()) {
-    RandomAccessFile* file;
+    std::unique_ptr<RandomAccessFile> file;
     TF_CHECK_OK(env->NewRandomAccessFile(fname, &file));
     string line;
-    io::InputBuffer in(file, buf_size);
+    io::InputBuffer in(file.get(), buf_size);
     EXPECT_TRUE(errors::IsOutOfRange(in.ReadLine(&line)));
   }
 }
@@ -52,10 +52,10 @@ TEST(InputBuffer, ReadLine1) {
   WriteStringToFile(env, fname, "line one\nline two\nline three\n");
 
   for (auto buf_size : BufferSizes()) {
-    RandomAccessFile* file;
+    std::unique_ptr<RandomAccessFile> file;
     TF_CHECK_OK(env->NewRandomAccessFile(fname, &file));
     string line;
-    io::InputBuffer in(file, buf_size);
+    io::InputBuffer in(file.get(), buf_size);
     TF_CHECK_OK(in.ReadLine(&line));
     EXPECT_EQ(line, "line one");
     TF_CHECK_OK(in.ReadLine(&line));
@@ -74,10 +74,10 @@ TEST(InputBuffer, ReadLine_NoTrailingNewLine) {
   WriteStringToFile(env, fname, "line one\nline two\nline three");
 
   for (auto buf_size : BufferSizes()) {
-    RandomAccessFile* file;
+    std::unique_ptr<RandomAccessFile> file;
     TF_CHECK_OK(env->NewRandomAccessFile(fname, &file));
     string line;
-    io::InputBuffer in(file, buf_size);
+    io::InputBuffer in(file.get(), buf_size);
     TF_CHECK_OK(in.ReadLine(&line));
     EXPECT_EQ(line, "line one");
     TF_CHECK_OK(in.ReadLine(&line));
@@ -96,10 +96,36 @@ TEST(InputBuffer, ReadLine_EmptyLines) {
   WriteStringToFile(env, fname, "line one\n\n\nline two\nline three");
 
   for (auto buf_size : BufferSizes()) {
-    RandomAccessFile* file;
+    std::unique_ptr<RandomAccessFile> file;
     TF_CHECK_OK(env->NewRandomAccessFile(fname, &file));
     string line;
-    io::InputBuffer in(file, buf_size);
+    io::InputBuffer in(file.get(), buf_size);
+    TF_CHECK_OK(in.ReadLine(&line));
+    EXPECT_EQ(line, "line one");
+    TF_CHECK_OK(in.ReadLine(&line));
+    EXPECT_EQ(line, "");
+    TF_CHECK_OK(in.ReadLine(&line));
+    EXPECT_EQ(line, "");
+    TF_CHECK_OK(in.ReadLine(&line));
+    EXPECT_EQ(line, "line two");
+    TF_CHECK_OK(in.ReadLine(&line));
+    EXPECT_EQ(line, "line three");
+    EXPECT_TRUE(errors::IsOutOfRange(in.ReadLine(&line)));
+    // A second call should also return end of file
+    EXPECT_TRUE(errors::IsOutOfRange(in.ReadLine(&line)));
+  }
+}
+
+TEST(InputBuffer, ReadLine_CRLF) {
+  Env* env = Env::Default();
+  string fname = testing::TmpDir() + "/inputbuffer_test";
+  WriteStringToFile(env, fname, "line one\r\n\r\n\r\nline two\r\nline three");
+
+  for (auto buf_size : BufferSizes()) {
+    std::unique_ptr<RandomAccessFile> file;
+    TF_CHECK_OK(env->NewRandomAccessFile(fname, &file));
+    string line;
+    io::InputBuffer in(file.get(), buf_size);
     TF_CHECK_OK(in.ReadLine(&line));
     EXPECT_EQ(line, "line one");
     TF_CHECK_OK(in.ReadLine(&line));
@@ -122,10 +148,10 @@ TEST(InputBuffer, ReadNBytes) {
   WriteStringToFile(env, fname, "0123456789");
 
   for (auto buf_size : BufferSizes()) {
-    RandomAccessFile* file;
+    std::unique_ptr<RandomAccessFile> file;
     TF_CHECK_OK(env->NewRandomAccessFile(fname, &file));
     string read;
-    io::InputBuffer in(file, buf_size);
+    io::InputBuffer in(file.get(), buf_size);
     EXPECT_EQ(0, in.Tell());
     TF_CHECK_OK(in.ReadNBytes(3, &read));
     EXPECT_EQ(read, "012");
@@ -157,10 +183,10 @@ TEST(InputBuffer, SkipNBytes) {
   WriteStringToFile(env, fname, "0123456789");
 
   for (auto buf_size : BufferSizes()) {
-    RandomAccessFile* file;
+    std::unique_ptr<RandomAccessFile> file;
     TF_CHECK_OK(env->NewRandomAccessFile(fname, &file));
     string read;
-    io::InputBuffer in(file, buf_size);
+    io::InputBuffer in(file.get(), buf_size);
     EXPECT_EQ(0, in.Tell());
     TF_CHECK_OK(in.SkipNBytes(3));
     EXPECT_EQ(3, in.Tell());

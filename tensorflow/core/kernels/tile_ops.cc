@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -23,11 +23,15 @@ limitations under the License.
 
 #include "tensorflow/core/kernels/tile_ops.h"
 
+#include <vector>
 #include "tensorflow/core/framework/numeric_op.h"
 #include "tensorflow/core/framework/op_kernel.h"
+#include "tensorflow/core/framework/register_types.h"
+#include "tensorflow/core/framework/tensor.h"
+#include "tensorflow/core/framework/type_index.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/gtl/array_slice.h"
-#include "tensorflow/core/public/tensor.h"
+#include "tensorflow/core/platform/macros.h"
 
 namespace tensorflow {
 
@@ -45,9 +49,9 @@ class TileOp : public OpKernel {
     const Tensor& multiples = context->input(1);
 
     OP_REQUIRES(
-        context, TensorShapeUtils::IsLegacyVector(multiples.shape()),
+        context, IsLegacyVector(multiples.shape()),
         errors::InvalidArgument("Expected multiples to be 1-D, but got shape ",
-                                multiples.shape().ShortDebugString()));
+                                multiples.shape().DebugString()));
     OP_REQUIRES(context, input.dims() == multiples.NumElements(),
                 errors::InvalidArgument(
                     "Expected multiples argument to be a vector of length ",
@@ -65,13 +69,16 @@ class TileOp : public OpKernel {
     TensorShape output_shape;
     for (int i = 0; i < input_dims; ++i) {
       OP_REQUIRES(
-          context, multiples_array[i] > 0,
-          errors::InvalidArgument("Expected multiples[", i, "] > 0, but got ",
+          context, multiples_array[i] >= 0,
+          errors::InvalidArgument("Expected multiples[", i, "] >= 0, but got ",
                                   multiples_array[i]));
       output_shape.AddDim(input.dim_size(i) * multiples_array[i]);
     }
     Tensor* result = nullptr;
     OP_REQUIRES_OK(context, context->allocate_output(0, output_shape, &result));
+
+    // If there's no output, there's nothing to do.
+    if (output_shape.num_elements() == 0) return;
 
 #define HANDLE_DIM(DT, NDIM)                                   \
   if (context->input(0).dtype() == DT && input_dims == NDIM) { \
@@ -86,15 +93,22 @@ class TileOp : public OpKernel {
   HANDLE_DIM(T, 4)     \
   HANDLE_DIM(T, 5)
 
-    HANDLE_TYPE(DT_BOOL);
-    HANDLE_TYPE(DT_FLOAT);
-    HANDLE_TYPE(DT_DOUBLE);
-    HANDLE_TYPE(DT_UINT8);
-    HANDLE_TYPE(DT_INT32);
-    HANDLE_TYPE(DT_INT16);
-    HANDLE_TYPE(DT_INT64);
-    HANDLE_TYPE(DT_STRING);  // when DEVICE=CPUDevice.
+#define HANDLE_TYPE_NAME(T) HANDLE_TYPE(DataTypeToEnum<T>::value)
 
+    // Invoke macro using TF_CALL_* so type-filtering for platform applies.
+    TF_CALL_bool(HANDLE_TYPE_NAME);
+    TF_CALL_float(HANDLE_TYPE_NAME);
+    TF_CALL_double(HANDLE_TYPE_NAME);
+    TF_CALL_uint8(HANDLE_TYPE_NAME);
+    TF_CALL_int32(HANDLE_TYPE_NAME);
+    TF_CALL_int16(HANDLE_TYPE_NAME);
+    TF_CALL_int64(HANDLE_TYPE_NAME);
+    TF_CALL_half(HANDLE_TYPE_NAME);
+    TF_CALL_string(HANDLE_TYPE_NAME);  // when DEVICE=CPUDevice.
+    TF_CALL_complex64(HANDLE_TYPE_NAME);
+    TF_CALL_complex128(HANDLE_TYPE_NAME);
+
+#undef HANDLE_TYPE_NAME
 #undef HANDLE_TYPE
 #undef HANDLE_DIM
 
@@ -156,14 +170,20 @@ inline void TileOp<Device>::HandleCase(
   HANDLE_CASE(device, dtype, 4);       \
   HANDLE_CASE(device, dtype, 5);
 
-HANDLE_CASE_DIM(CPUDevice, DT_BOOL);
-HANDLE_CASE_DIM(CPUDevice, DT_FLOAT);
-HANDLE_CASE_DIM(CPUDevice, DT_DOUBLE);
-HANDLE_CASE_DIM(CPUDevice, DT_UINT8);
-HANDLE_CASE_DIM(CPUDevice, DT_INT32);
-HANDLE_CASE_DIM(CPUDevice, DT_INT16);
-HANDLE_CASE_DIM(CPUDevice, DT_INT64);
-HANDLE_CASE_DIM(CPUDevice, DT_STRING);
+#define HANDLE_TYPE_NAME_CPU(T) \
+  HANDLE_CASE_DIM(CPUDevice, DataTypeToEnum<T>::value);
+
+TF_CALL_bool(HANDLE_TYPE_NAME_CPU);
+TF_CALL_float(HANDLE_TYPE_NAME_CPU);
+TF_CALL_double(HANDLE_TYPE_NAME_CPU);
+TF_CALL_uint8(HANDLE_TYPE_NAME_CPU);
+TF_CALL_int32(HANDLE_TYPE_NAME_CPU);
+TF_CALL_int16(HANDLE_TYPE_NAME_CPU);
+TF_CALL_int64(HANDLE_TYPE_NAME_CPU);
+TF_CALL_half(HANDLE_TYPE_NAME_CPU);
+TF_CALL_complex64(HANDLE_TYPE_NAME_CPU);
+TF_CALL_complex128(HANDLE_TYPE_NAME_CPU);
+TF_CALL_string(HANDLE_TYPE_NAME_CPU);
 
 #if GOOGLE_CUDA
 HANDLE_CASE_DIM(GPUDevice, DT_FLOAT);
@@ -171,8 +191,10 @@ HANDLE_CASE_DIM(GPUDevice, DT_DOUBLE);
 HANDLE_CASE_DIM(GPUDevice, DT_INT16);
 HANDLE_CASE_DIM(GPUDevice, DT_INT32);
 HANDLE_CASE_DIM(GPUDevice, DT_INT64);
+HANDLE_CASE_DIM(GPUDevice, DT_HALF);
 #endif  // GOOGLE_CUDA
 
+#undef HANDLE_TYPE_NAME_CPU
 #undef HANDLE_CASE_DIM
 #undef HANDLE_CASE
 
@@ -186,9 +208,9 @@ class TileGradientOp : public OpKernel {
     const Tensor& input = context->input(0);
     const Tensor& multiples = context->input(1);
     OP_REQUIRES(
-        context, TensorShapeUtils::IsLegacyVector(multiples.shape()),
+        context, IsLegacyVector(multiples.shape()),
         errors::InvalidArgument("Expected multiples to be 1-D, but got shape ",
-                                multiples.shape().ShortDebugString()));
+                                multiples.shape().DebugString()));
     OP_REQUIRES(context, input.dims() == multiples.NumElements(),
                 errors::InvalidArgument(
                     "Expected multiples argument to be a vector of length ",
@@ -236,12 +258,16 @@ class TileGradientOp : public OpKernel {
   HANDLE_DIM(T, 4)     \
   HANDLE_DIM(T, 5)
 
-    HANDLE_TYPE(DT_FLOAT);
-    HANDLE_TYPE(DT_DOUBLE);
-    HANDLE_TYPE(DT_INT32);
-    HANDLE_TYPE(DT_INT16);
-    HANDLE_TYPE(DT_INT64);
+#define HANDLE_TYPE_NAME(T) HANDLE_TYPE(DataTypeToEnum<T>::value)
 
+    TF_CALL_float(HANDLE_TYPE_NAME);
+    TF_CALL_double(HANDLE_TYPE_NAME);
+    TF_CALL_int32(HANDLE_TYPE_NAME);
+    TF_CALL_int16(HANDLE_TYPE_NAME);
+    TF_CALL_int64(HANDLE_TYPE_NAME);
+    TF_CALL_half(HANDLE_TYPE_NAME);
+
+#undef HANDLE_TYPE_NAME
 #undef HANDLE_TYPE
 #undef HANDLE_DIM
 
@@ -355,12 +381,8 @@ inline void TileGradientOp<Device>::HandleCase(
     OpKernelContext* context, const std::vector<int32>& input_dims,
     const gtl::ArraySlice<int32>& multiples_array, Tensor* result) {
   LOG(FATAL) << "TileGradientOp: Invalid combination of Device, DT and NDIM: "
-#ifdef __ANDROID__
-             << "[Device not shown, no RTTI], " << DataTypeString(DT) << ", "
-#else   // __ANDROID__
-             << typeid(Device).name() << ", " << DataTypeString(DT) << ", "
-#endif  // __ANDROID__
-             << NDIM;
+             << MakeTypeIndex<Device>().name() << ", " << DataTypeString(DT)
+             << ", " << NDIM;
 }
 
 #define HANDLE_CASE(device, dtype, ndim)                                       \
@@ -380,11 +402,17 @@ inline void TileGradientOp<Device>::HandleCase(
   HANDLE_CASE(device, dtype, 4);       \
   HANDLE_CASE(device, dtype, 5);
 
-HANDLE_CASE_DIM(CPUDevice, DT_FLOAT);
-HANDLE_CASE_DIM(CPUDevice, DT_DOUBLE);
-HANDLE_CASE_DIM(CPUDevice, DT_INT16);
-HANDLE_CASE_DIM(CPUDevice, DT_INT32);
-HANDLE_CASE_DIM(CPUDevice, DT_INT64);
+#define HANDLE_TYPE_NAME_CPU(T) \
+  HANDLE_CASE_DIM(CPUDevice, DataTypeToEnum<T>::value);
+
+TF_CALL_float(HANDLE_TYPE_NAME_CPU);
+TF_CALL_double(HANDLE_TYPE_NAME_CPU);
+TF_CALL_int16(HANDLE_TYPE_NAME_CPU);
+TF_CALL_int32(HANDLE_TYPE_NAME_CPU);
+TF_CALL_int64(HANDLE_TYPE_NAME_CPU);
+TF_CALL_half(HANDLE_TYPE_NAME_CPU);
+TF_CALL_complex64(HANDLE_TYPE_NAME_CPU);
+TF_CALL_complex128(HANDLE_TYPE_NAME_CPU);
 
 #if GOOGLE_CUDA
 HANDLE_CASE_DIM(GPUDevice, DT_FLOAT);
@@ -392,8 +420,11 @@ HANDLE_CASE_DIM(GPUDevice, DT_DOUBLE);
 HANDLE_CASE_DIM(GPUDevice, DT_INT16);
 HANDLE_CASE_DIM(GPUDevice, DT_INT32);
 HANDLE_CASE_DIM(GPUDevice, DT_INT64);
+HANDLE_CASE_DIM(GPUDevice, DT_HALF);
+
 #endif  // GOOGLE_CUDA
 
+#undef HANDLE_TYPE_NAME_CPU
 #undef HANDLE_CASE_DIM
 #undef HANDLE_CASE
 
@@ -440,6 +471,7 @@ DEFINE_GPU_TYPE(double);
 DEFINE_GPU_TYPE(int64);
 DEFINE_GPU_TYPE(int32);
 DEFINE_GPU_TYPE(int16);
+DEFINE_GPU_TYPE(Eigen::half);
 }  // end namespace functor
 
 #undef DEFINE_GPU_DIM
@@ -457,6 +489,11 @@ REGISTER_KERNEL_BUILDER(Name("Tile")
                         TileOp<GPUDevice>);
 REGISTER_KERNEL_BUILDER(Name("Tile")
                             .Device(DEVICE_GPU)
+                            .TypeConstraint<Eigen::half>("T")
+                            .HostMemory("multiples"),
+                        TileOp<GPUDevice>);
+REGISTER_KERNEL_BUILDER(Name("Tile")
+                            .Device(DEVICE_GPU)
                             .TypeConstraint<int16>("T")
                             .HostMemory("multiples"),
                         TileOp<GPUDevice>);
@@ -469,6 +506,11 @@ REGISTER_KERNEL_BUILDER(Name("TileGrad")
 REGISTER_KERNEL_BUILDER(Name("TileGrad")
                             .Device(DEVICE_GPU)
                             .TypeConstraint<double>("T")
+                            .HostMemory("multiples"),
+                        TileGradientOp<GPUDevice>);
+REGISTER_KERNEL_BUILDER(Name("TileGrad")
+                            .Device(DEVICE_GPU)
+                            .TypeConstraint<Eigen::half>("T")
                             .HostMemory("multiples"),
                         TileGradientOp<GPUDevice>);
 REGISTER_KERNEL_BUILDER(Name("TileGrad")

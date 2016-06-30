@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,9 +17,10 @@ limitations under the License.
 #define TENSORFLOW_LIB_IO_INPUTBUFFER_H_
 
 #include <string>
-#include "tensorflow/core/platform/port.h"
-#include "tensorflow/core/public/env.h"
-#include "tensorflow/core/public/status.h"
+#include "tensorflow/core/lib/core/status.h"
+#include "tensorflow/core/platform/env.h"
+#include "tensorflow/core/platform/macros.h"
+#include "tensorflow/core/platform/types.h"
 
 namespace tensorflow {
 namespace io {
@@ -30,8 +31,7 @@ namespace io {
 class InputBuffer {
  public:
   // Create an InputBuffer for "file" with a buffer size of
-  // "buffer_bytes" bytes.  Takes ownership of "file" and will
-  // delete it when the InputBuffer is destroyed.
+  // "buffer_bytes" bytes.  'file' must outlive *this.
   InputBuffer(RandomAccessFile* file, size_t buffer_bytes);
   ~InputBuffer();
 
@@ -60,7 +60,7 @@ class InputBuffer {
  private:
   Status FillBuffer();
 
-  RandomAccessFile* file_;  // Owned
+  RandomAccessFile* file_;  // Not owned
   int64 file_pos_;          // Next position to read from in "file_"
   size_t size_;             // Size of "buf_"
   char* buf_;               // The buffer itself

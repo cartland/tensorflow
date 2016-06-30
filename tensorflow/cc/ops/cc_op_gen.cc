@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -27,9 +27,10 @@ limitations under the License.
 #include "tensorflow/core/lib/gtl/map_util.h"
 #include "tensorflow/core/lib/gtl/stl_util.h"
 #include "tensorflow/core/lib/strings/strcat.h"
+#include "tensorflow/core/platform/env.h"
 #include "tensorflow/core/platform/logging.h"
-#include "tensorflow/core/platform/port.h"
-#include "tensorflow/core/public/env.h"
+#include "tensorflow/core/platform/macros.h"
+#include "tensorflow/core/platform/types.h"
 
 namespace tensorflow {
 namespace {
@@ -93,6 +94,11 @@ void WriteCCOp(const OpDef& op_def, WritableFile* h, WritableFile* cc) {
     comment = "TODO: add doc.\n";
   } else {
     comment = strings::StrCat(op_def.summary(), "\n");
+    if (op_def.has_deprecation()) {
+      strings::StrAppend(&comment, "\nDEPRECATED at GraphDef version ",
+                         op_def.deprecation().version(), ":\n",
+                         op_def.deprecation().explanation(), ".\n");
+    }
     if (!op_def.description().empty()) {
       strings::StrAppend(&comment, "\n", op_def.description(), "\n");
     }
@@ -168,7 +174,7 @@ void WriteCCOp(const OpDef& op_def, WritableFile* h, WritableFile* cc) {
                      R"comment(  .WithName(StringPiece): Set the Node's name
   .WithDevice(StringPiece): Set the Node's requested device
   .WithControlInput(Node*) / .WithControlInputs({Node*, ...}):
-    Add control depencies on the specified Node(s).
+    Add control dependencies on the specified Node(s).
 
 Returns a pointer to the created Node)comment");
 
@@ -254,13 +260,24 @@ Returns a pointer to the created Node)comment");
 }
 
 // Converts:
-//   bazel-out/.../genfiles/XX
+//   bazel-out/.../genfiles/(external/YYY/)?XX
 // to: XX.
 string GetPath(const std::string& dot_h_fname) {
   auto pos = dot_h_fname.find("/genfiles/");
-  if (pos == string::npos) return dot_h_fname;
-  // - 1 account for the terminating null character (\0) in "/genfiles/".
-  return dot_h_fname.substr(pos + sizeof("/genfiles/") - 1);
+  string result = dot_h_fname;
+  if (pos != string::npos) {
+    // - 1 account for the terminating null character (\0) in "/genfiles/".
+    result = dot_h_fname.substr(pos + sizeof("/genfiles/") - 1);
+  }
+  if (result.size() > sizeof("external/") &&
+      result.compare(0, sizeof("external/") - 1, "external/") == 0) {
+    result = result.substr(sizeof("external/") - 1);
+    pos = result.find("/");
+    if (pos != string::npos) {
+      result = result.substr(pos + 1);
+    }
+  }
+  return result;
 }
 
 // Converts:
@@ -288,8 +305,8 @@ string ToGuard(const std::string& path) {
 void WriteCCOps(const OpList& ops, const std::string& dot_h_fname,
                 const std::string& dot_cc_fname) {
   Env* env = Env::Default();
-  WritableFile* h = nullptr;
-  WritableFile* cc = nullptr;
+  std::unique_ptr<WritableFile> h;
+  std::unique_ptr<WritableFile> cc;
   TF_CHECK_OK(env->NewWritableFile(dot_h_fname, &h));
   TF_CHECK_OK(env->NewWritableFile(dot_cc_fname, &cc));
 
@@ -306,11 +323,11 @@ void WriteCCOps(const OpList& ops, const std::string& dot_h_fname,
                       "#define ",
                       guard, R"header(
 
+#include "tensorflow/core/framework/tensor.h"
+#include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/types.h"
 #include "tensorflow/core/graph/graph_def_builder.h"
 #include "tensorflow/core/lib/gtl/array_slice.h"
-#include "tensorflow/core/public/tensor.h"
-#include "tensorflow/core/public/tensor_shape.h"
 
 namespace tensorflow {
 namespace ops {
@@ -339,7 +356,7 @@ namespace ops {
   TF_CHECK_OK(s);
 
   for (const auto& op_def : ops.op()) {
-    WriteCCOp(op_def, h, cc);
+    WriteCCOp(op_def, h.get(), cc.get());
   }
 
   // .h Footer

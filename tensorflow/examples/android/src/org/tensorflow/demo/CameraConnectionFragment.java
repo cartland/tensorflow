@@ -132,6 +132,11 @@ public class CameraConnectionFragment extends Fragment {
   private CameraDevice cameraDevice;
 
   /**
+   * The rotation in degrees of the camera sensor from the display. 
+   */
+  private Integer sensorOrientation;
+  
+  /**
    * The {@link android.util.Size} of camera preview.
    */
   private Size previewSize;
@@ -178,6 +183,16 @@ public class CameraConnectionFragment extends Fragment {
    * A {@link Handler} for running tasks in the background.
    */
   private Handler backgroundHandler;
+
+  /**
+   * An additional thread for running inference so as not to block the camera.
+   */
+  private HandlerThread inferenceThread;
+
+  /**
+   * A {@link Handler} for running tasks in the background.
+   */
+  private Handler inferenceHandler;
 
   /**
    * An {@link ImageReader} that handles preview frame capture.
@@ -328,6 +343,8 @@ public class CameraConnectionFragment extends Fragment {
                 Arrays.asList(map.getOutputSizes(ImageFormat.YUV_420_888)),
                 new CompareSizesByArea());
 
+        sensorOrientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
+        
         // Danger, W.R.! Attempting to use too large a preview size could  exceed the camera
         // bus' bandwidth limitation, resulting in gorgeous previews but the storage of
         // garbage capture data.
@@ -404,9 +421,13 @@ public class CameraConnectionFragment extends Fragment {
    * Starts a background thread and its {@link Handler}.
    */
   private void startBackgroundThread() {
-    backgroundThread = new HandlerThread("CameraBackground");
+    backgroundThread = new HandlerThread("ImageListener");
     backgroundThread.start();
     backgroundHandler = new Handler(backgroundThread.getLooper());
+    
+    inferenceThread = new HandlerThread("InferenceThread");
+    inferenceThread.start();
+    inferenceHandler = new Handler(inferenceThread.getLooper());
   }
 
   /**
@@ -414,10 +435,15 @@ public class CameraConnectionFragment extends Fragment {
    */
   private void stopBackgroundThread() {
     backgroundThread.quitSafely();
+    inferenceThread.quitSafely();
     try {
       backgroundThread.join();
       backgroundThread = null;
       backgroundHandler = null;
+      
+      inferenceThread.join();
+      inferenceThread = null;
+      inferenceThread = null;
     } catch (final InterruptedException e) {
       LOGGER.e(e, "Exception!");
     }
@@ -511,7 +537,8 @@ public class CameraConnectionFragment extends Fragment {
     }
 
     LOGGER.i("Getting assets.");
-    tfPreviewListener.initialize(getActivity().getAssets(), scoreView);
+    tfPreviewListener.initialize(
+        getActivity().getAssets(), scoreView, inferenceHandler, sensorOrientation);
     LOGGER.i("Tensorflow initialized.");
   }
 

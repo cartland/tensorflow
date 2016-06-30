@@ -1,5 +1,6 @@
-<link rel="import" href="../../bower_components/polymer/polymer.html">
+<link rel="import" href="../polymer/polymer.html">
 <link rel="import" href="../tf-graph/tf-graph-icon.html">
+<link rel="import" href="../tf-dashboard-common/tensorboard-color.html">
 
 <dom-module id="tf-node-list-item">
   <style>
@@ -9,6 +10,7 @@
     font-size: 11pt;
     font-weight: 400;
     position: relative;
+    display: inline-block;
   }
 
   #list-item:hover {
@@ -20,7 +22,6 @@
   }
 
   #list-item span {
-    display: block;
     margin-left: 40px;
   }
 
@@ -28,10 +29,21 @@
     color: #999;
   }
 
+  #list-item span.edge-label {
+    float: right;
+    font-size: 10px;
+    margin-left: 3px;
+    margin-right: 5px;
+  }
+
   .node-icon {
     position: absolute;
     top: 1px;
     left: 2px;
+  }
+
+  .faded span {
+    color: var(--tb-graph-faded);
   }
   </style>
   <template>
@@ -39,11 +51,14 @@
          on-mouseover="_nodeListener"
          on-mouseout="_nodeListener"
          on-click="_nodeListener">
-      <tf-graph-icon class="node-icon" height="12"
-          color-by="[[colorBy]]" color-by-params="[[colorByParams]]"
-          node="[[itemNode]]" render-info="[[itemRenderInfo]]"
-          template-index="[[templateIndex]]"></tf-graph-icon>
-      <span title$="[[name]]">[[name]]</span>
+      <div class$="{{_fadedClass(itemRenderInfo)}}">
+        <tf-graph-icon class="node-icon" height="12"
+            color-by="[[colorBy]]" color-by-params="[[colorByParams]]"
+            node="[[itemNode]]" render-info="[[itemRenderInfo]]"
+            template-index="[[templateIndex]]"></tf-graph-icon>
+        <span title$="[[name]]">[[name]]</span>
+        <span class="edge-label">[[edgeLabel]]</span>
+      </div>
     </div>
   </template>
 
@@ -63,6 +78,8 @@
            * @type {tf.graph.Node}
            */
           itemNode: Object,
+          /** The edge label associated with this item. */
+          edgeLabel: String,
           /**
            * The render node information for the item node. Used by the graph
            * icon in determining fill color.
@@ -75,7 +92,7 @@
           },
           colorBy: String,
           colorByParams: Object,
-          templateIndex: Function,
+          templateIndex: Function
         },
 
         _itemTypeChanged: function() {
@@ -93,8 +110,11 @@
             nodeName: this.name,
             type: this.itemType
           });
-        }
+        },
 
+        _fadedClass: function(itemRenderInfo) {
+          return itemRenderInfo && itemRenderInfo.isFadedOut ? 'faded' : '';
+        }
       });
     })();
   </script>

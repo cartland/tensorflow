@@ -1,4 +1,4 @@
-# Copyright 2015 Google Inc. All Rights Reserved.
+# Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,12 +18,25 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import tensorflow.python.platform
-
 import numpy as np
 
 import tensorflow as tf
 
+from tensorflow.python.framework import ops
+
+
+# TODO(zongheng): it'd be great to factor out this function and various random
+# SparseTensor gen funcs.
+def _sparsify(x, thresh=0.5, index_dtype=np.int64):
+  x[x < thresh] = 0
+
+  non_zero = np.where(x)
+  x_indices = np.vstack(non_zero).astype(index_dtype).T
+  x_values = x[non_zero]
+  x_shape = x.shape
+
+  return ops.SparseTensor(
+      indices=x_indices, values=x_values, shape=x_shape), len(x_values)
 
 class ShapeOpsTest(tf.test.TestCase):
 
@@ -35,10 +48,37 @@ class ShapeOpsTest(tf.test.TestCase):
     self.assertAllEqual(np_ans, result)
     self.assertShapeEqual(np_ans, tf_ans)
 
+  def _compareShapeSparse(self, x_np, use_gpu=False):
+    np_ans = np.array(np.shape(x_np))
+    x_tf, unused_nnz = _sparsify(x_np)
+    with self.test_session(use_gpu=use_gpu):
+      tf_ans = tf.shape(x_tf)
+      result = tf_ans.eval()
+    self.assertAllEqual(np_ans, result)
+    self.assertShapeEqual(np_ans, tf_ans)
+
+  def _compareShapeN(self, x, use_gpu=False):
+    np_ans = np.array(np.shape(x))
+    with self.test_session(use_gpu=use_gpu) as sess:
+      tf_ans = tf.shape_n([x, x, x])
+      result = sess.run(tf_ans)
+    for i in range(3):
+      self.assertAllEqual(np_ans, result[i])
+      self.assertShapeEqual(np_ans, tf_ans[i])
+
   def _compareRank(self, x, use_gpu=False):
     np_ans = np.asarray(np.ndim(x))
     with self.test_session(use_gpu=use_gpu):
       tf_ans = tf.rank(x)
+      result = tf_ans.eval()
+    self.assertAllEqual(np_ans, result)
+    self.assertShapeEqual(np_ans, tf_ans)
+
+  def _compareRankSparse(self, x_np, use_gpu=False):
+    np_ans = np.asarray(np.ndim(x_np))
+    x_tf, unused_nnz = _sparsify(x_np)
+    with self.test_session(use_gpu=use_gpu):
+      tf_ans = tf.rank(x_tf)
       result = tf_ans.eval()
     self.assertAllEqual(np_ans, result)
     self.assertShapeEqual(np_ans, tf_ans)
@@ -51,27 +91,44 @@ class ShapeOpsTest(tf.test.TestCase):
     self.assertAllEqual(np_ans, result)
     self.assertShapeEqual(np_ans, tf_ans)
 
+  def _compareSizeSparse(self, x_np, use_gpu=False):
+    np_ans = np.asarray(np.size(x_np))
+    x_tf, unused_nnz = _sparsify(x_np)
+    with self.test_session(use_gpu=use_gpu):
+      tf_ans = tf.size(x_tf)
+      result = tf_ans.eval()
+    self.assertAllEqual(np_ans, result)
+    self.assertShapeEqual(np_ans, tf_ans)
+
   def _testCpu(self, x):
     self._compareShape(x, use_gpu=False)
+    self._compareShapeN(x, use_gpu=False)
     self._compareRank(x, use_gpu=False)
     self._compareSize(x, use_gpu=False)
+    self._compareShapeSparse(x, use_gpu=False)
+    self._compareRankSparse(x, use_gpu=False)
+    self._compareSizeSparse(x, use_gpu=False)
 
   def _testGpu(self, x):
     self._compareShape(x, use_gpu=True)
+    self._compareShapeN(x, use_gpu=True)
     self._compareRank(x, use_gpu=True)
     self._compareSize(x, use_gpu=True)
+    self._compareShapeSparse(x, use_gpu=True)
+    self._compareRankSparse(x, use_gpu=True)
+    self._compareSizeSparse(x, use_gpu=True)
 
   def _testAll(self, x):
     self._testCpu(x)
     self._testGpu(x)
 
   def testBasic(self):
-    self._testAll(np.zeros([2]))
-    self._testAll(np.zeros([2, 3]))
-    self._testAll(np.zeros([2, 3, 5]))
-    self._testAll(np.zeros([2, 3, 5, 7]))
-    self._testAll(np.zeros([2, 3, 5, 7, 11]))
-    self._testAll(np.zeros([2, 3, 5, 7, 11, 13]))
+    self._testAll(np.random.randn(2))
+    self._testAll(np.random.randn(2, 3))
+    self._testAll(np.random.randn(2, 3, 5))
+    self._testAll(np.random.randn(2, 3, 5, 7))
+    self._testAll(np.random.randn(2, 3, 5, 7, 11))
+    self._testAll(np.random.randn(2, 3, 5, 7, 11, 13))
 
   def _compareExpandDims(self, x, dim, use_gpu):
     np_ans = np.expand_dims(x, axis=dim)
@@ -212,6 +269,19 @@ class ShapeOpsTest(tf.test.TestCase):
       err = tf.test.compute_gradient_error(a, [4, 1, 2, 1], squeezed, [4, 2, 1])
     self.assertLess(err, 1e-3)
 
+  def testSqueezeWithUnknownShape(self):
+    with self.test_session():
+      a = tf.placeholder(tf.float32, shape=[2, None])
+
+      squeezed = tf.squeeze(a, [1])
+      self.assertEqual([2], squeezed.get_shape().as_list())
+
+      squeezed = tf.squeeze(a)
+      self.assertEqual(None, squeezed.get_shape())
+
+      self.assertRaises(ValueError, tf.squeeze, a, [0])
+      self.assertRaises(ValueError, tf.squeeze, a, [100])
+
 
 class TileTest(tf.test.TestCase):
 
@@ -227,20 +297,30 @@ class TileTest(tf.test.TestCase):
 
   def testSimple(self):
     with self.test_session():
-      inp = np.random.rand(4, 1).astype("f")
-      a = tf.constant([float(x) for x in inp.ravel(order="C")],
-                   shape=[4, 1], dtype=tf.float32)
+      inp = np.random.rand(4, 1).astype(np.float32)
+      a = tf.constant(inp)
       tiled = tf.tile(a, [1, 4])
       result = tiled.eval()
     self.assertEqual(result.shape, (4, 4))
     self.assertEqual([4, 4], tiled.get_shape())
     self.assertTrue((result == np.tile(inp, (1, 4))).all())
 
+  def testEmpty(self):
+    with self.test_session():
+      inp = np.random.rand(2, 3).astype(np.float32)
+      a = tf.constant(inp)
+      tiled = tf.tile(a, [5, 0])
+      result = tiled.eval()
+    self.assertEqual(result.shape, (10, 0))
+    self.assertEqual([10, 0], tiled.get_shape())
+
   def testTypes(self):
     types_to_test = {
         "bool": (tf.bool, bool),
         "float32": (tf.float32, float),
         "float64": (tf.float64, float),
+        "complex64": (tf.complex64, complex),
+        "complex128": (tf.complex128, complex),
         "uint8": (tf.uint8, int),
         "int32": (tf.int32, int),
         "int64": (tf.int64, int),

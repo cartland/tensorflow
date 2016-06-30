@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -61,7 +61,7 @@ Status AssignStreams(const Graph* graph, const AssignStreamsOpts& opts,
       }
     }
   }
-  // We perform stream assigmnent assuming a large number of
+  // We perform stream assignment assuming a large number of
   // stream IDs and then map these down to the required number of streams
   // using simple round-robin.
   // Stream Assignment strategy:

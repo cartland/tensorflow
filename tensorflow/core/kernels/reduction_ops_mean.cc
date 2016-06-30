@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -23,5 +23,21 @@ namespace tensorflow {
       ReductionOp<CPUDevice, type, Eigen::internal::MeanReducer<type>>);
 TF_CALL_REAL_NUMBER_TYPES(REGISTER_CPU_KERNELS);
 #undef REGISTER_CPU_KERNELS
+
+#if GOOGLE_CUDA
+
+#define REGISTER_GPU_KERNELS(type)          \
+  REGISTER_KERNEL_BUILDER(                  \
+      Name("Mean")                          \
+          .Device(DEVICE_GPU)               \
+          .TypeConstraint<type>("T")        \
+          .HostMemory("reduction_indices"), \
+      ReductionOp<GPUDevice, type, Eigen::internal::MeanReducer<type>>);
+REGISTER_GPU_KERNELS(Eigen::half);
+REGISTER_GPU_KERNELS(float);
+REGISTER_GPU_KERNELS(double);
+#undef REGISTER_GPU_KERNELS
+
+#endif
 
 }  // namespace tensorflow

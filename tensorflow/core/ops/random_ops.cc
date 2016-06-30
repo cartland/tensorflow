@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ REGISTER_OP("RandomUniform")
     .Output("output: dtype")
     .Attr("seed: int = 0")
     .Attr("seed2: int = 0")
-    .Attr("dtype: {float,double}")
+    .Attr("dtype: {half,float,double}")
     .Attr("T: {int32, int64}")
     .Doc(R"doc(
 Outputs random values from a uniform distribution.
@@ -79,7 +79,7 @@ REGISTER_OP("RandomStandardNormal")
     .Output("output: dtype")
     .Attr("seed: int = 0")
     .Attr("seed2: int = 0")
-    .Attr("dtype: {float,double}")
+    .Attr("dtype: {half,float,double}")
     .Attr("T: {int32, int64}")
     .Doc(R"doc(
 Outputs random values from a normal distribution.
@@ -102,7 +102,7 @@ REGISTER_OP("TruncatedNormal")
     .Output("output: dtype")
     .Attr("seed: int = 0")
     .Attr("seed2: int = 0")
-    .Attr("dtype: {float,double}")
+    .Attr("dtype: {half,float,double}")
     .Attr("T: {int32, int64}")
     .Doc(R"doc(
 Outputs random values from a truncated normal distribution.
@@ -150,6 +150,57 @@ seed2: A second seed to avoid seed collision.
 
 output: A tensor of same shape and type as `value`, shuffled along its first
   dimension.
+)doc");
+
+REGISTER_OP("Multinomial")
+    .SetIsStateful()
+    .Input("logits: T")
+    .Input("num_samples: int32")
+    .Output("output: int64")
+    .Attr("seed: int = 0")
+    .Attr("seed2: int = 0")
+    .Attr("T: realnumbertype")
+    .Doc(R"doc(
+Draws samples from a multinomial distribution.
+
+logits: 2-D Tensor with shape `[batch_size, num_classes]`.  Each slice `[i, :]`
+  represents the unnormalized log probabilities for all classes.
+num_samples: 0-D.  Number of independent samples to draw for each row slice.
+seed: If either seed or seed2 is set to be non-zero, the internal random number
+  generator is seeded by the given seed.  Otherwise, a random seed is used.
+seed2: A second seed to avoid seed collision.
+output: 2-D Tensor with shape `[batch_size, num_samples]`.  Each slice `[i, :]`
+  contains the drawn class labels with range `[0, num_classes)`.
+)doc");
+
+REGISTER_OP("RandomGamma")
+    .SetIsStateful()
+    .Input("shape: S")
+    .Input("alpha: T")
+    .Output("output: T")
+    .Attr("seed: int = 0")
+    .Attr("seed2: int = 0")
+    .Attr("S: {int32, int64}")
+    .Attr("T: {half, float, double}")
+    .Doc(R"doc(
+Outputs random values from the Gamma distribution(s) described by alpha.
+
+This op uses the algorithm by Marsaglia et al. to acquire samples via
+transformation-rejection from pairs of uniform and normal random variables.
+See http://dl.acm.org/citation.cfm?id=358414
+
+shape: 1-D integer tensor. Shape of independent samples to draw from each
+  distribution described by the shape parameters given in alpha.
+alpha: A tensor in which each scalar is a "shape" parameter describing the
+  associated gamma distribution.
+seed: If either `seed` or `seed2` are set to be non-zero, the random number
+  generator is seeded by the given seed.  Otherwise, it is seeded by a
+  random seed.
+seed2: A second seed to avoid seed collision.
+
+output: A tensor with shape `shape + shape(alpha)`. Each slice
+  `[:, ..., :, i0, i1, ...iN]` contains the samples drawn for
+  `alpha[i0, i1, ...iN]`. The dtype of the output matches the dtype of alpha.
 )doc");
 
 }  // namespace tensorflow

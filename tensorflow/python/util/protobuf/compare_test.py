@@ -1,4 +1,4 @@
-# Copyright 2015 Google Inc. All Rights Reserved.
+# Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,10 +23,11 @@ import copy
 import re
 import textwrap
 
+import six
+
 from tensorflow.python.platform import googletest
 from tensorflow.python.util.protobuf import compare
 from tensorflow.python.util.protobuf import compare_test_pb2
-import six
 
 from google.protobuf import text_format
 

@@ -22,7 +22,7 @@ py_library(
     name = "input_data",
     srcs = ["input_data.py"],
     srcs_version = "PY2AND3",
-    visibility = ["//tensorflow:__subpackages__"],
+    visibility = ["//visibility:public"],
     deps = ["//tensorflow:tensorflow_py"],
 )
 
@@ -32,7 +32,7 @@ py_library(
         "mnist.py",
     ],
     srcs_version = "PY2AND3",
-    visibility = ["//tensorflow:__subpackages__"],
+    visibility = ["//visibility:public"],
     deps = [
         "//tensorflow:tensorflow_py",
     ],
@@ -96,6 +96,7 @@ py_test(
     ],
     main = "mnist_with_summaries.py",
     srcs_version = "PY2AND3",
+    tags = ["notsan"],  # http://b/29184009
     deps = [
         ":input_data",
         "//tensorflow:tensorflow_py",
